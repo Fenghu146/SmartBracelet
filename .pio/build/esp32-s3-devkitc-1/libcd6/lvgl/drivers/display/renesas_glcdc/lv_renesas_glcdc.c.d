@@ -1,0 +1,29 @@
+.pio/build/esp32-s3-devkitc-1/libcd6/lvgl/drivers/display/renesas_glcdc/lv_renesas_glcdc.c.o: \
+ .pio/libdeps/esp32-s3-devkitc-1/lvgl/src/drivers/display/renesas_glcdc/lv_renesas_glcdc.c \
+ .pio/libdeps/esp32-s3-devkitc-1/lvgl/src/drivers/display/renesas_glcdc/lv_renesas_glcdc.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\display\lv_display.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\misc\lv_types.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\lv_conf_internal.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\lv_conf_kconfig.h \
+ C:/Users/35015/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/qio_qspi/include/sdkconfig.h \
+ C:/Users/35015/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_common/include/esp_attr.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\misc\lv_timer.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\tick\lv_tick.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\lv_conf_internal.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\misc\lv_types.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\misc\lv_types.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\misc\lv_ll.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\misc\lv_event.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\misc\lv_array.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\misc\lv_color.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\misc\lv_assert.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\misc\lv_log.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\stdlib\lv_mem.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\lv_conf_internal.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\stdlib\lv_string.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\misc\lv_types.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\misc\lv_math.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\misc\lv_palette.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\misc\lv_color.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\misc\lv_color_op.h \
+ c:\users\35015\desktop\smartbracelet\.pio\libdeps\esp32-s3-devkitc-1\lvgl\src\misc\lv_area.h
