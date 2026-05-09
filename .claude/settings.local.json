@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import platformio; print\\(platformio.__version__\\)\")",
+      "Bash(pio boards *)",
+      "Bash(python -m platformio boards esp32-s3)",
+      "Bash(python -m platformio boards espressif32)",
+      "WebSearch",
+      "Bash(git ls-remote *)",
+      "Bash(GIT_SSL_NO_VERIFY=1 git ls-remote *)",
+      "Bash(python -m platformio pkg search cst816t)",
+      "Bash(python -m platformio pkg search QMI8658)",
+      "Bash(python -m platformio pkg search ES8311)",
+      "Bash(python -m platformio pkg search SensorLib)",
+      "Bash(python -m platformio pkg search arduino-audio-driver)",
+      "Bash(python -m platformio pkg search lv_arduino)"
+    ]
+  }
+}
