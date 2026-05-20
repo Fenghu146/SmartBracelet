@@ -48,7 +48,15 @@
       "Bash(python __TRACKED_VAR__/.platformio/packages/tool-esptoolpy/esptool.py --chip esp32s3 --port COM9 --baud 115200 verify_flash --flash_mode qio --flash_freq 80m --flash_size 16MB 0x0 .pio/build/esp32s3/bootloader.bin 0x8000 .pio/build/esp32s3/partitions.bin 0x10000 .pio/build/esp32s3/firmware.bin)",
       "Bash(git rm *)",
       "Bash(xtensa-esp32s3-elf-size -A .pio/build/esp32s3/firmware.elf)",
-      "Bash(python __TRACKED_VAR__/.platformio/packages/tool-esptoolpy/esptool.py --chip esp32s3 image_info .pio/build/esp32s3/firmware.bin)"
+      "Bash(python __TRACKED_VAR__/.platformio/packages/tool-esptoolpy/esptool.py --chip esp32s3 image_info .pio/build/esp32s3/firmware.bin)",
+      "WebFetch(domain:www.waveshare.net)",
+      "WebFetch(domain:spotpear.com)",
+      "Bash(git clone *)",
+      "Bash(cp /tmp/waveshare_esp32s3/examples/Arduino/libraries/SensorLib/src/SensorPCF85063.hpp lib/SensorLib-Waveshare/src/)",
+      "Bash(cp /tmp/waveshare_esp32s3/examples/Arduino/libraries/SensorLib/src/SensorQMI8658.hpp lib/SensorLib-Waveshare/src/)",
+      "Bash(cp /tmp/waveshare_esp32s3/examples/Arduino/libraries/SensorLib/src/SensorCommon.tpp lib/SensorLib-Waveshare/src/)",
+      "Bash(cp /tmp/waveshare_esp32s3/examples/Arduino/libraries/SensorLib/src/SensorLib.h lib/SensorLib-Waveshare/src/)",
+      "Bash(cp /tmp/waveshare_esp32s3/examples/Arduino/libraries/SensorLib/src/SensorRTC.h lib/SensorLib-Waveshare/src/)"
     ]
   }
 }
