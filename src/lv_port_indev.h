@@ -1,9 +1,10 @@
 #ifndef LV_PORT_INDEV_H
 #define LV_PORT_INDEV_H
 
-#include <CST816S.h>
+#include <memory>
+#include "Arduino_IIC.h"
 
-extern CST816S *touch;
+extern std::unique_ptr<Arduino_IIC> touch;
 
 void lv_port_indev_init(void);
 

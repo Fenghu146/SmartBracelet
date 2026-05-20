@@ -515,3 +515,93 @@ main.cpp
 2. **串口启动消息不可见** — USB CDC 重枚举慢于程序启动，setup 中的 `USBSerial.println` 总是丢失
 3. **`touch->begin()` 无错误返回** — I2C 通信失败也会静默继续，需手动验证触摸读数
 4. **CST816S 与 AXP2101 I2C 共享** — 地址不同 (0x15 vs 0x34) 理论上可共存，后续 PMU 集成时需验证
+
+---
+
+# 第五次调试报告：触摸驱动迁移至 Arduino_DriveBus + Boot Loop（2026-05-20）
+
+## 概述
+
+发现官方 Waveshare 板使用 **CST816D** 芯片（非 CST816S），需从 `fbiego/CST816S` 库迁移至 `Arduino_DriveBus` 官方库。迁移编译成功但烧录后进入 **Boot Loop**（TG0WDT_SYS_RST 无限重启）。
+
+## 关键发现
+
+### 1. 芯片型号更正
+
+| 来源 | 声称型号 | 实际型号 |
+|------|---------|---------|
+| 旧 `CST816S` 库 | CST816S | ❌ 错误 |
+| Waveshare 官方仓库 + schematic | CST816T/D | ✅ CST816D (I2C 地址 0x15) |
+| `Arduino_DriveBus` 驱动 | CST816D/T | ✅ 同时支持 CST816D 和 CST816T |
+
+**结论**：板子上的触控芯片是 **CST816D**，必须使用 `Arduino_DriveBus` 库的 `Arduino_CST816x` 驱动。
+
+### 2. 引脚配置更正
+
+对比官方 Waveshare `pin_config.h`（确认无 `TP_SDA`/`TP_SCL` 定义）：
+
+```cpp
+// 旧（错误）:
+#define TP_SDA IIC_SDA  // 19 (或 15)
+#define TP_SCL IIC_SCL  // 20 (或 14)
+
+// 新（匹配官方）:
+// 无 TP_SDA/TP_SCL 定义
+// 触控 I2C 通过 IIC_SDA (15) / IIC_SCL (14) + Wire.begin() 访问
+```
+
+### 3. Arduino_DriveBus API
+
+| 功能 | API |
+|------|-----|
+| 总线 | `std::make_shared<Arduino_HWIIC>(sda, scl, &Wire)` |
+| 触控对象 | `std::make_unique<Arduino_CST816x>(bus, 0x15, rst, irq, callback)` |
+| 中断标志 | `touch->IIC_Interrupt_Flag`（ISR 中置位） |
+| 读坐标 X | `touch->IIC_Read_Device_Value(Arduino_IIC_Touch::TOUCH_COORDINATE_X)` |
+| 读坐标 Y | `touch->IIC_Read_Device_Value(Arduino_IIC_Touch::TOUCH_COORDINATE_Y)` |
+| 写中断模式 | `touch->IIC_Write_Device_State(Arduino_IIC_Touch::TOUCH_DEVICE_INTERRUPT_MODE, Arduino_IIC_Touch::TOUCH_DEVICE_INTERRUPT_PERIODIC)` |
+
+### 4. Boot Loop 分析
+
+迁移后编译成功，烧录后观察串口：
+
+```
+SHA-256 comparison failed:
+Attempting to boot anyway...
+entry 0x403774a0
+→ ~800ms → rst:0x7 (TG0WDT_SYS_RST) → 重复
+```
+
+SHA-256 校验失败是已有现象（eFuse secure boot hash 不匹配），之前一直 `Attempting to boot anyway...` 后正常启动。本次区别：
+
+| 指标 | 第4次（正常） | 第5次（Boot Loop） |
+|------|-------------|-------------------|
+| RAM 使用 | 38,776 bytes (11.8%) | 90,040 bytes (27.5%) |
+| Flash 使用 | 680,691 bytes (20.3%) | 770,181 bytes (23.0%) |
+| `.iram0.text` | 未知 | 60,523 bytes (0xec6b) |
+| `.dram0.bss` | 未知 | 75,720 bytes (0x127c8) |
+
+**RAM 翻倍**（38KB → 90KB），IRAM 使用 60KB。`esp32-s3-devkitc-1` 默认 IRAM 上限接近此值，可能导致启动阶段内存布局冲突。
+
+**可能原因**：
+1. IRAM 溢出（60KB 超过默认 48KB/64KB 限制）
+2. `-DBOARD_HAS_PSRAM` 与无 PSRAM 板冲突
+3. `SensorLib` 的 `TouchDrvCST816` 与 `Arduino_CST816x` 双驱动冲突
+4. `-DCORE_DEBUG_LEVEL=5` 引入过多 `IRAM_ATTR` 函数
+
+### 5. 擦除后串口丢失
+
+`esptool.py erase_flash` 成功后芯片彻底无 bootloader，串口设备消失（COM9 不可访问）。需进入下载模式（BOOT+RST）或冷启动才能重新识别。
+
+### 6. 当前状态
+
+- 触控驱动迁移 **代码完成、编译通过**
+- **烧录后 Boot Loop**，无法验证触摸功能
+- flash 已擦除，板子空片待救
+
+## 下一步
+
+1. 冷启动或进入下载模式后重新烧录
+2. 如仍 Boot Loop：移除 `-DBOARD_HAS_PSRAM` 和 `-DCORE_DEBUG_LEVEL=5` 缩小镜像
+3. 或使用 `ESP32-S3-R8-OPI` 自定义板 JSON（带 OPI PSRAM，IRAM 空间更大）
+4. 最终验证：`pio device monitor` 应打印 `T x y` 触摸坐标 + `tick` 每 2s
