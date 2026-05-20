@@ -16,6 +16,7 @@ static BLEService *pTimeService = nullptr;
 static BLECharacteristic *pTimeChar = nullptr;
 static BLECharacteristic *pBatteryChar = nullptr;
 static BLECharacteristic *pNotifyChar = nullptr;
+static BLECharacteristic *pTxChar = nullptr;
 
 NotificationData ble_notification = {0};
 
@@ -113,6 +114,15 @@ static void setup_notification_service(BLEServer *server)
         BLECharacteristic::PROPERTY_WRITE |
         BLECharacteristic::PROPERTY_WRITE_NR);
     pNotifyChar->setCallbacks(new NotifyCallback());
+
+    pTxChar = svc->createCharacteristic(
+        BLEUUID("abcd0003-0000-1000-8000-00805f9b34fb"),
+        BLECharacteristic::PROPERTY_NOTIFY |
+        BLECharacteristic::PROPERTY_INDICATE |
+        BLECharacteristic::PROPERTY_READ);
+    pTxChar->addDescriptor(new BLE2902());
+    pTxChar->setValue("");
+
     svc->start();
 }
 
@@ -120,6 +130,7 @@ void ble_srv_init(void)
 {
     BLEDevice::init(DEVICE_NAME);
     BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT_NO_MITM);
+    BLEDevice::setMTU(256);
     BLESecurity *sec = new BLESecurity();
     sec->setAuthenticationMode(ESP_LE_AUTH_NO_BOND);
     sec->setCapability(ESP_IO_CAP_NONE);
@@ -172,4 +183,21 @@ void ble_srv_update_time(void)
     cts[8] = 0;
     cts[9] = 0;
     pTimeChar->setValue(cts, 10);
+}
+
+void ble_srv_send(const char *data)
+{
+    USBSerial.printf("BLE send: '%s' tx=%p conn=%d\n",
+      data, pTxChar, pServer ? pServer->getConnectedCount() : -1);
+    if (pTxChar) {
+        size_t len = strlen(data);
+        pTxChar->setValue((uint8_t *)data, len);
+        pTxChar->notify();
+        USBSerial.printf("BLE notify: sent (%d bytes)\n", len);
+    }
+}
+
+bool ble_is_connected(void)
+{
+    return pServer && pServer->getConnectedCount() > 0;
 }
