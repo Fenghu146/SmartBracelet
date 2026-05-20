@@ -5,14 +5,22 @@ static lv_indev_drv_t indev_drv;
 
 static void touchpad_read(lv_indev_drv_t *drv, lv_indev_data_t *data)
 {
-    static bool was_pressed = false;
     (void)drv;
 
-    if (touch && touch->available()) {
-        data->point.x = touch->data.x;
-        data->point.y = touch->data.y;
-        data->state = (touch->data.event == 0) ? LV_INDEV_STATE_PR : LV_INDEV_STATE_REL;
-        was_pressed = (data->state == LV_INDEV_STATE_PR);
+    int32_t tx = 0, ty = 0;
+
+    if (touch && touch->IIC_Interrupt_Flag == true) {
+        touch->IIC_Interrupt_Flag = false;
+        tx = touch->IIC_Read_Device_Value(
+            Arduino_IIC_Touch::Value_Information::TOUCH_COORDINATE_X);
+        ty = touch->IIC_Read_Device_Value(
+            Arduino_IIC_Touch::Value_Information::TOUCH_COORDINATE_Y);
+    }
+
+    if (tx > 20 && ty > 20) {
+        data->point.x = tx;
+        data->point.y = ty;
+        data->state = LV_INDEV_STATE_PR;
     } else {
         data->state = LV_INDEV_STATE_REL;
     }
