@@ -19,14 +19,15 @@
 - ✅ RTC: PCF85063 时间读写
 - ✅ IMU: QMI8658 加速度+陀螺仪, 计步算法
 - ✅ PMU: AXP2101 电量读取, 电源轨配置
-- ✅ UI: 数字表盘(时间/日期/电池/步数) + 传感器页面, 2页导航
-- ❌ BLE 通知同步 — **当前任务**
-- ❌ WiFi NTP 校时 — **当前任务**
-- ❌ Deep sleep 低功耗 — **当前任务**
+- ✅ UI: 数字表盘 + 模拟表盘 + 传感器页, 3页滑动导航
+- ✅ WiFi NTP: 自动连接 + NTP 校时
+- ✅ BLE: 通知推送 (nRF Connect -> 手表)
+- ❌ Deep sleep 低功耗
+- ❌ 手机 App
 
 ## 关键配置
 
-`board = esp32-s3-devkitc-1`，`board_build.flash_mode = qio`（eFuse 锁定）。上传速度 115200，`--after hard_reset`。当前 RAM 101KB/320KB (30.8%), Flash 605KB/3.3MB (18.1%)。
+`board = esp32-s3-devkitc-1`，`board_build.flash_mode = qio`（eFuse 锁定）。上传速度 115200，`--after hard_reset`。当前 RAM 148KB/320KB (45%), Flash 1.6MB/3.3MB (49%)。
 
 ## 已知问题 / 坑
 
