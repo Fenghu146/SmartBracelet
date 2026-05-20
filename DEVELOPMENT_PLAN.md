@@ -46,7 +46,7 @@
 | **Flash**  | 16MB                             | 充足的存储空间               |
 | **PSRAM**  | 8MB OPI                          | 大内存利于 AI 模型 + LVGL 缓冲 |
 | **屏幕**     | ST7789, 240×284, SPI             | 需偏移量 (0,20,0,0)       |
-| **触摸**     | CST816S (I2C)                    | 电容触摸                  |
+| **触摸**     | CST816D (I2C, 地址 0x15)           | 电容触摸，CST816S 库兼容驱动    |
 | **PMU**    | AXP2101                          | 电源管理、电池充电             |
 | **IMU**    | QMI8658 (I2C)                    | 6 轴加速度+陀螺仪            |
 | **I2C 接口** | SDA=15, SCL=14                   | 传感器总线                 |
@@ -69,11 +69,9 @@
 
 ### 2.3 硬件限制
 
-- 无独立 RTC 芯片（需软件实现或 WiFi/BLE 校时）
-- 无音频编解码器（需要外接 I2S MEMS Mic）
+- **有** PCF85063 RTC 芯片（I2C 0x51，板上已集成）
+- 无音频编解码器（需要外接 I2S MEMS Mic，板上 ES8311 音频编解码器待确认接线）
 - 无心率/血氧传感器
-
----
 
 ## 3. 开源方案调研
 
@@ -250,15 +248,15 @@ ESP32-S3 提供 **向量指令集**（PIE），专为 AI 推理加速设计：
 
 ### 6.2 关键库选择
 
-| 层      | 方案                        | 原因           |
-| ------ | ------------------------- | ------------ |
-| UI 框架  | **LVGL 8.4.0**            | 已安装，社区成熟     |
-| 显示驱动   | **Arduino_GFX (ST7789)**  | 已验证可用        |
-| 触摸驱动   | **CST816S**               | 已安装          |
-| IMU 驱动 | **SensorLib**             | 已安装          |
-| BLE    | **Arduino BLE / NimBLE**  | Arduino 原生支持 |
-| AI 推理  | **TFLite Micro / ESP-NN** | 轻量，支持 S3 加速  |
-| 电源管理   | **自研 AXP2101 驱动**         | 片上 PMU       |
+| 层      | 方案                        | 原因             |
+| ------ | ------------------------- | -------------- |
+| UI 框架  | **LVGL 8.4.0**            | 已安装，社区成熟       |
+| 显示驱动   | **Arduino_GFX (ST7789)**  | 已验证可用          |
+| 触摸驱动   | **CST816S (fbiego)**      | 兼容 CST816D，已验证 |
+| IMU 驱动 | **SensorLib**             | 已安装            |
+| BLE    | **Arduino BLE / NimBLE**  | Arduino 原生支持   |
+| AI 推理  | **TFLite Micro / ESP-NN** | 轻量，支持 S3 加速    |
+| 电源管理   | **自研 AXP2101 驱动**         | 片上 PMU         |
 
 ### 6.3 目录结构
 
@@ -322,10 +320,14 @@ SmartBracelet/
 
 **已完成的准备工作：**
 
-- ✅ 板级引脚定义 (`pin_config.h`)
+- ✅ 板级引脚定义 (`pin_config.h`) — 已按官方仓库确认
 - ✅ 屏幕初始化（偏移 0,20,0,0）已验证
-- ✅ USBSerial 串口正常
-- ✅ LVGL 8.4.0 依赖已安装
+- ✅ USBSerial 串口正常（带 3 秒超时，避免 USB 枚举卡死）
+- ✅ LVGL 8.4.0 依赖已安装 + 显示驱动正常
+- ✅ LVGL 显示缓冲区配置（240×284/10，RGB565，SWAP=0）
+- ✅ CST816D 触控驱动（使用 fbiego/CST816S 库，兼容驱动）
+- ✅ 触控引脚移到 I2C 总线 15/14（与原 USB 引脚 19/20 解冲突）
+- ✅ LVGL 指针输入驱动已注册
 
 ### 第二阶段：核心手表功能（6 周）
 
@@ -410,32 +412,36 @@ pip install onnx onnxruntime
 
 ### 8.4 烧录方式
 
-推荐使用 esptool.py 直接烧录（避免 `pio run --target upload` 输出截断问题）：
+推荐使用 esptool.py 直接烧录（`pio run --target upload` 在 921600 波特率下不稳定）：
 
 ```powershell
 python "$env:USERPROFILE\.platformio\packages\tool-esptoolpy\esptool.py" `
-    --chip esp32s3 --port COM9 --baud 921600 `
+    --chip esp32s3 --port COM9 --baud 115200 `
     --before default_reset --after hard_reset write_flash -z `
-    --flash_mode dio --flash_freq 80m --flash_size detect `
+    --flash_mode qio --flash_freq 80m --flash_size 16MB `
     0x0 ".pio/build/esp32s3/bootloader.bin" `
     0x8000 ".pio/build/esp32s3/partitions.bin" `
     0x10000 ".pio/build/esp32s3/firmware.bin"
 ```
 
+**注意**：eFuse 锁定 QIO 模式，必须用 `--flash_mode qio`；波特率用 115200 避免 `Packet content transfer stopped` 错误。
+
 ---
 
 ## 9. 风险评估
 
-| 风险                              | 影响  | 概率  | 缓解措施                                  |
-| ------------------------------- | --- | --- | ------------------------------------- |
-| PSRAM 初始化失败（boot loop）          | 高   | 中   | 使用自定义 board JSON 配置 OPI PSRAM         |
-| LVGL 大内存消耗触发 OOM                | 高   | 中   | 使用 PSRAM 作为 LVGL 画布，控制缓冲大小            |
-| TFLite Micro 模型无法在 8MB PSRAM 加载 | 中   | 低   | 模型量化 INT8，剪枝优化                        |
-| 续航不足                            | 高   | 中   | 分阶段优化：空闲降频 → 浅睡 → Deep sleep          |
-| BLE 协议栈与 WiFi 共存冲突              | 中   | 低   | 分时复用，或 NimBLE 优化                      |
-| 屏幕偏移/旋转不正确                      | 中   | 低   | 已验证偏移 (0,20,0,0)                      |
-| USB 串口静默崩溃                      | 高   | 低   | 全局 `new` 放入 `setup()`，不重复定义 USBSerial |
-| 无 TFLite（需安装）影响 AI 进度           | 中   | 高   | 优先用 Python 完成模型训练，最后安装 TensorFlow     |
+| 风险                              | 影响  | 概率  | 缓解措施                                                                 |
+| ------------------------------- | --- | --- | -------------------------------------------------------------------- |
+| PSRAM 初始化失败（boot loop）          | 高   | 中   | 用 `-DBOARD_HAS_PSRAM` + 标准板型，不要用自定义 `ESP32-S3-R8-OPI`（USBSerial 未定义） |
+| IRAM 溢出（库体积大 → TG0WDT 复位）       | 高   | 中   | 移除不用的 lib_deps（SensorLib、Arduino_DriveBus），保持固件 <600KB Flash         |
+| LVGL 大内存消耗触发 OOM                | 高   | 中   | 控制显示缓冲区大小（当前 240×284/10 = 13.6KB），必要时用 PSRAM                         |
+| TFLite Micro 模型无法在 8MB PSRAM 加载 | 中   | 低   | 模型量化 INT8，剪枝优化                                                       |
+| 续航不足                            | 高   | 中   | 分阶段优化：空闲降频 → 浅睡 → Deep sleep                                         |
+| BLE 协议栈与 WiFi 共存冲突              | 中   | 低   | 分时复用，或 NimBLE 优化                                                     |
+| 屏幕偏移/旋转不正确                      | 中   | 低   | 已验证偏移 (0,20,0,0)                                                     |
+| USB 串口静默崩溃                      | 高   | 低   | 全局 `new` 放入 `setup()`；USBSerial 加 3 秒超时；不自定义板 JSON                   |
+| RTS 复位不可靠                       | 中   | 高   | 上传后手动拔插 USB 冷启动                                                      |
+| 无 TFLite（需安装）影响 AI 进度           | 中   | 高   | 优先用 Python 完成模型训练，最后安装 TensorFlow                                    |
 
 ---
 
@@ -454,4 +460,10 @@ python "$env:USERPROFILE\.platformio\packages\tool-esptoolpy\esptool.py" `
 
 ### B. 已调试经验
 
-见 `DEBUG_REPORT.md` — 包含 USBSerial 重复定义、全局 `new` 崩溃等关键问题排查记录。
+见 `DEBUG_REPORT.md` — 包含以下 5 次调试记录：
+
+1. **白屏/启动循环** — USBSerial 重复定义、全局 new 崩溃
+2. **USB 插拔后 flash 损坏** — 全片擦除 + esptool 手动三段式烧录
+3. **LVGL 集成** — 显示缓冲区、颜色字节序 (SWAP=0)、配置路径
+4. **LVGL 验证 + 触摸集成** — RST 复位、触摸引脚 19/20 → 15/14 迁移
+5. **Boot Loop 修复** — Arduino_DriveBus → CST816S 回退、精简依赖
