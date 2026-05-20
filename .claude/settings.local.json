@@ -69,7 +69,11 @@
       "Bash(xtensa-esp32s3-elf-size .pio/build/esp32s3/firmware.elf)",
       "Bash(python __TRACKED_VAR__/.platformio/packages/tool-esptoolpy/esptool.py image_info .pio/build/esp32s3/firmware.bin)",
       "Bash(tee /tmp/pio_build.txt)",
-      "Bash(~/.platformio/penv/Scripts/pio.exe run *)"
+      "Bash(~/.platformio/penv/Scripts/pio.exe run *)",
+      "Bash(python __TRACKED_VAR__/.platformio/packages/tool-esptoolpy/esptool.py --chip esp32s3 --port COM9 --baud 115200 write_flash -z --flash_mode qio --flash_freq 80m --flash_size 16MB 0x0 .pio/build/esp32s3/bootloader.bin 0x8000 .pio/build/esp32s3/partitions.bin 0x10000 .pio/build/esp32s3/firmware.bin)",
+      "Bash(python -c \"import serial.tools.list_ports; [print\\(p\\) for p in serial.tools.list_ports.comports\\(\\)]\")",
+      "Bash(python -c \"import serial; serial.Serial\\('COM9', 115200, timeout=0.5\\).close\\(\\)\")",
+      "Bash(break)"
     ]
   }
 }

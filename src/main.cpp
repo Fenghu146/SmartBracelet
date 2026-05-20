@@ -367,6 +367,17 @@ void loop() {
     ble_notification.has_new = 0;
     USBSerial.printf("Notify: [%s] %s - %s\n",
       ble_notification.app_id, ble_notification.title, ble_notification.body);
+    // Echo back to phone as ack
+    char reply[64];
+    snprintf(reply, sizeof(reply), "ack:%s", ble_notification.app_id);
+    ble_srv_send(reply);
+  }
+
+  // Serial-to-BLE: any input sends immediately
+  while (USBSerial.available()) {
+    char c = USBSerial.read();
+    char one[2] = {c, 0};
+    ble_srv_send(one);
   }
 
   if (imu.getDataReady()) {

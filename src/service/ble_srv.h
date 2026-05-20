@@ -6,6 +6,8 @@
 void ble_srv_init(void);
 void ble_srv_update_battery(uint8_t level);
 void ble_srv_update_time(void);
+void ble_srv_send(const char *data);
+bool ble_is_connected(void);
 
 typedef struct {
     char app_id[16];
