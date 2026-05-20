@@ -14,5 +14,7 @@
 #define IIC_SDA 15
 #define IIC_SCL 14
 
+#define TP_SDA 19
+#define TP_SCL 20
 #define TP_RST 39
 #define TP_INT 13

@@ -183,3 +183,255 @@ $port.Close()
 3. **阅读核心源码** — ESP32 Arduino 3.x 与 2.x 有显著差异（如 USBSerial 预定义），迁移项目时应查看 `HWCDC.cpp` 等核心文件。
 4. **串口日志是生命线** — 在每一步关键操作前后添加 `USBSerial.println()` 输出，确保程序执行流可见。
 5. **ESP32-S3 的 USB 串口** — 不依赖 `Serial`（通过 UART0 的物理串口），而是使用 `USBSerial`（通过 USB CDC 的虚拟串口）。
+
+---
+
+# 第二次调试报告：USB 插拔后板子"死亡"（2026-05-20）
+
+## 问题描述
+
+显示测试固件正常工作中（屏幕显示红→绿→蓝→文字，串口正常输出），用户插拔一次 USB 线后，板子完全无法工作：屏幕黑屏、串口无输出、重新上传失败报错 `Packet content transfer stopped (received 1 bytes)`。
+
+最终诊断：**flash 内容因带电插拔而损坏**，芯片启动时 bootloader 校验失败，自动回退到下载模式。
+
+## 调试过程
+
+### 阶段 1：确认板子通信
+
+使用 esptool.py 直连：
+
+```powershell
+python esptool.py --chip esp32s3 --port COM9 --baud 115200 flash_id
+```
+
+结果：芯片正常响应，flash 为 16MB，eFuse 配置为 quad 模式。说明 USB 硬件通信正常，问题在 flash 内容层面。
+
+### 阶段 2：全片擦除
+
+使用 esptool.py 全片擦除：
+
+```powershell
+python esptool.py --chip esp32s3 --port COM9 --baud 115200 erase_flash
+```
+
+耗时 34 秒，成功完成。
+
+### 阶段 3：手动烧录
+
+PlatformIO 的 `pio run --target upload` 在 115200 波特率下也卡住（之前 921600 更差），改用 esptool.py 手动三段式烧录：
+
+```powershell
+python esptool.py --chip esp32s3 --port COM9 --baud 115200 write_flash -z `
+    --flash_mode qio --flash_freq 80m --flash_size 16MB `
+    0x0 .pio/build/esp32s3/bootloader.bin `
+    0x8000 .pio/build/esp32s3/partitions.bin `
+    0x10000 .pio/build/esp32s3/firmware.bin
+```
+
+三份文件全部写入并校验通过（Hash of data verified）。
+
+### 阶段 4：验证板子启动
+
+烧录纯背光测试固件（无 USBSerial、无 GFX，仅用 `pinMode` + `digitalWrite` 让背光闪烁），拔 USB 再插回后观察到背光规律闪烁 → 确认芯片从 flash 正常启动、固件正确执行。
+
+### 阶段 5：恢复显示固件
+
+烧录完整 Arduino_GFX 显示测试固件，屏幕正常显示红→绿→蓝→"SmartBracelet"文字，故障排除。
+
+## 根因分析
+
+| 因素 | 说明 |
+|------|------|
+| **直接原因** | USB 带电插拔导致 flash 某次写入被中断，bootloader 或应用数据损坏 |
+| **为什么表现为"板子死了"** | ESP32-S3 的 ROM bootloader 检测到 flash 内容异常（校验失败或无效头部），自动进入下载模式等待救活 |
+| **为什么上传也失败** | 921600 高波特率下信号完整性差，加上 flash 异常状态导致 esptool 通信中断 |
+| **为什么 RTS 复位后仍进下载模式** | DTR/RTS 复位电路在此板子上不可靠，"Hard resetting via RTS pin" 后 GPIO0 可能仍被拉低 |
+
+## 关键发现
+
+### 1. 上传速度影响可靠性
+
+| 速度 | 结果 |
+|------|------|
+| 921600 | 不稳定，`Packet content transfer stopped` |
+| 115200 | 稳定工作 |
+
+**建议**：ESP32-S3-Touch-LCD-1.83 使用 115200 上传速度。
+
+### 2. 自定义板子配置的陷阱
+
+`boards/ESP32-S3-R8-OPI.json` 的 `extra_flags` 包含 `-DARDUINO_ESP32S3_DEV_16M_OPI`，但 ESP32 Arduino 3.x 内核不识别此板型，导致 `USBSerial` 未定义、编译失败。
+
+**解决**：使用标准板型 `esp32-s3-devkitc-1`，通过 `build_flags` 手动添加 `-DBOARD_HAS_PSRAM` 启用 PSRAM。flash 大小由 esptool 的 `--flash_size 16MB` 参数在烧录时指定。
+
+### 3. eFuse flash 模式
+
+`esptool.py flash_id` 确认该板 eFuse 设置为 **quad (4 data lines)**，必须使用 QIO 模式。
+
+**不要**使用 `board_build.flash_mode = dio`，否则 flash 可能不工作。
+
+### 4. RTS/DTR 复位电路不可靠
+
+此板子的 RTS→EN 复位信号可能未正确连接或电平转换异常，esptool 的 "Hard resetting via RTS pin" 后芯片无法从 flash 启动。
+
+**解决方法**：上传完毕后手动拔插 USB 线（不按 BOOT 键）来冷启动。
+
+### 5. USB CDC 枚举超时
+
+程序中 `USBSerial.begin()` 后若不等待枚举直接输出，可能在 USB 未准备好时丢失数据。但在等待期间若 USB 始终不枚举，程序会永久阻塞。
+
+**解决**：添加 3 秒超时：
+
+```cpp
+USBSerial.begin(115200);
+unsigned long start = millis();
+while (!USBSerial && millis() - start < 3000) {
+    delay(10);
+}
+```
+
+### 6. 最小可行性验证
+
+烧录固件后，如果串口无输出且屏幕黑屏，先用纯 GPIO 测试（背光闪烁）确认芯片是否在运行，再逐层添加外设驱动。
+
+## 验证 Checklist
+
+- [x] 全片擦除成功
+- [x] bootloader 写入校验通过
+- [x] 分区表写入校验通过
+- [x] 固件写入校验通过
+- [x] 背光闪烁测试通过（芯片运行确认）
+- [x] Arduino_GFX 显示测试通过（红→绿→蓝→文字）
+- [x] USBSerial 串口输出正常
+- [x] USB 插拔后能正常启动（不按 BOOT）
+
+## 最终配置
+
+`platformio.ini` 关键设置：
+
+```ini
+upload_speed = 115200
+board_build.flash_mode = qio
+
+build_flags =
+  -DCORE_DEBUG_LEVEL=5
+  -Og
+  -DDEBUG_ESP_PORT=Serial
+  -DLV_CONF_INCLUDE_SIMPLE
+  -DBOARD_HAS_PSRAM
+```
+
+esptool.py 烧录参数：
+
+```powershell
+python esptool.py --chip esp32s3 --port COM9 --baud 115200 write_flash -z `
+    --flash_mode qio --flash_freq 80m --flash_size 16MB `
+    0x0 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin
+```
+
+## 恢复流程（下次遇到同样问题）
+
+```
+1. 降低 platformio.ini upload_speed 到 115200
+2. 按住 BOOT 键
+3. 插 USB 线
+4. 松开 BOOT 键
+5. 运行 esptool.py erase_flash 全片擦除
+6. 运行 pio run 编译
+7. 运行 esptool.py 手动三段式烧录
+8. 拔 USB → 等 10 秒 → 插 USB（不按 BOOT）
+9. 验证背光/屏幕/串口
+```
+
+---
+
+# 第三次调试报告：LVGL 集成（2026-05-20）
+
+## 概述
+
+在 Arduino_GFX 显示驱动正常工作基础上，集成 LVGL 8.4.0 图形库，实现显示缓冲区和刷新回调的对接。
+
+## 涉及文件
+
+| 文件 | 动作 | 说明 |
+|------|------|------|
+| `include/lv_conf.h` | **新建** | LVGL 8.4.0 配置文件，适配 240x284 ST7789 |
+| `src/lv_port_disp.cpp.bak` | **→ .cpp** | 显示驱动移植文件（重命名激活） |
+| `src/lv_port_indev.cpp.bak` | **→ .cpp** | 触控移植文件（重命名，未启用） |
+| `src/main.cpp` | **修改** | 添加 lv_init()、lv_port_disp_init()、lv_timer_handler() |
+
+## 关键发现
+
+### 1. lv_conf.h 存放位置
+
+`-DLV_CONF_INCLUDE_SIMPLE` 让 LVGL 通过 `#include "lv_conf.h"` 加载配置。编译器需要在 include path 中找到此文件。
+
+| 位置 | 结果 |
+|------|------|
+| `src/lv_conf.h` | ❌ 编译时找不到（LVGL 库文件编译时 `src/` 不在 include path） |
+| 项目根目录 `lv_conf.h` | ❌ 同样问题 |
+| `include/lv_conf.h` + `-Iinclude` | ✅ 成功 |
+
+**解决**：放在 `include/`，并在 `build_flags` 中添加 `-Iinclude`。
+
+### 2. LV_COLOR_16_SWAP
+
+ST7789 SPI 显示屏期望 RGB565 颜色以 **高字节在前** 的字节序传输。ESP32 是小端架构，uint16_t 在内存中存储为 [低字节, 高字节]。
+
+| 设置 | 结果 |
+|------|------|
+| `LV_COLOR_16_SWAP 1` | ❌ 颜色错乱（"彩色的"） |
+| `LV_COLOR_16_SWAP 0` | ✅ 颜色正常 |
+
+这说明 Arduino_GFX 的 `draw16bitRGBBitmap()` 内部已经处理了字节序，LVGL 不需要再做 swap。
+
+### 3. 内存占用
+
+| 指标 | 数值 |
+|------|------|
+| RAM 使用 | 83,732 bytes (25.6%) |
+| Flash 使用 | 528,917 bytes (15.8%) |
+| LVGL 显示缓冲区 | 6,816 像素 × 2 字节 ≈ 13.6 KB（屏幕的 1/10） |
+
+### 4. 触控未启用
+
+CST816S 触控芯片的 I2C 引脚（TP_SDA=19, TP_SCL=20）与 ESP32-S3 原生 USB 引脚（USB_D+/USB_D-）为同一组 GPIO。启用触控 I2C 可能与 `USBSerial` 使用的 USB CDC 冲突。待确认正确引脚映射后再启用。
+
+## 最终配置
+
+`platformio.ini` 当前设置：
+
+```ini
+upload_speed = 115200
+board_build.flash_mode = qio
+
+build_flags =
+  -DCORE_DEBUG_LEVEL=5
+  -Og
+  -DDEBUG_ESP_PORT=Serial
+  -DLV_CONF_INCLUDE_SIMPLE
+  -DBOARD_HAS_PSRAM
+  -Iinclude
+```
+
+## LVGL 软件架构
+
+```
+main.cpp
+  ├── Arduino_GFX (ST7789 SPI 驱动)
+  │     └── gfx->draw16bitRGBBitmap()  ← LVGL disp_flush 回调
+  ├── lv_init()
+  ├── lv_port_disp_init()
+  │     ├── disp_buf[240×284/10]       ← 显示缓冲区
+  │     └── disp_drv.flush_cb           ← 注册刷新回调
+  └── loop()
+        └── lv_timer_handler()          ← 每 5ms 调用
+```
+
+## 验证 Checklist
+
+- [x] lv_conf.h 编译通过
+- [x] lv_port_disp 刷新回调正常
+- [x] LVGL 标签文本显示正确
+- [x] 颜色字节序正确（SWAP=0）
+- [x] 内存占用在合理范围

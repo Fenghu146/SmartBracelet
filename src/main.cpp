@@ -3,50 +3,52 @@
 #include <Arduino_GFX.h>
 #include <databus/Arduino_ESP32SPI.h>
 #include <display/Arduino_ST7789.h>
+#include <lvgl.h>
+#include "lv_port_disp.h"
 
 Arduino_DataBus *bus = nullptr;
 Arduino_GFX *gfx = nullptr;
 
+static void lvgl_ui_init(void) {
+  lv_obj_t *scr = lv_scr_act();
+  lv_obj_set_style_bg_color(scr, lv_color_hex(0x1a1a2e), 0);
+
+  lv_obj_t *label = lv_label_create(scr);
+  lv_label_set_text(label, "SmartBracelet\nLVGL Ready!");
+  lv_obj_set_style_text_color(label, lv_color_hex(0x00d4ff), 0);
+  lv_obj_set_style_text_font(label, &lv_font_montserrat_16, 0);
+  lv_obj_center(label);
+}
+
 void setup() {
-  USBSerial.begin(115200);
-  delay(500);
-  USBSerial.println("Booting...");
-
-  bus = new Arduino_ESP32SPI(LCD_DC, LCD_CS, LCD_SCK, LCD_MOSI, GFX_NOT_DEFINED);
-  USBSerial.println("bus created");
-
-  gfx = new Arduino_ST7789(bus, LCD_RST, 0, true, LCD_WIDTH, LCD_HEIGHT, 0, 20, 0, 0);
-  USBSerial.println("gfx created");
-
   pinMode(LCD_BL, OUTPUT);
   digitalWrite(LCD_BL, HIGH);
 
+  USBSerial.begin(115200);
+  unsigned long start = millis();
+  while (!USBSerial && millis() - start < 3000) {
+    delay(10);
+  }
+  USBSerial.println("Booting LVGL...");
+
+  bus = new Arduino_ESP32SPI(LCD_DC, LCD_CS, LCD_SCK, LCD_MOSI, GFX_NOT_DEFINED);
+  gfx = new Arduino_ST7789(bus, LCD_RST, 0, true, LCD_WIDTH, LCD_HEIGHT, 0, 20, 0, 0);
+
   if (!gfx->begin()) {
     USBSerial.println("gfx->begin() FAILED");
-    while (true);
+    while (true) delay(100);
   }
-  USBSerial.println("gfx->begin() OK");
+  USBSerial.println("gfx OK");
 
-  gfx->fillScreen(RED);
-  USBSerial.println("RED");
-  delay(1000);
+  lv_init();
+  lv_port_disp_init();
+  USBSerial.println("LVGL display port OK");
 
-  gfx->fillScreen(GREEN);
-  USBSerial.println("GREEN");
-  delay(1000);
-
-  gfx->fillScreen(BLUE);
-  USBSerial.println("BLUE");
-  delay(1000);
-
-  gfx->fillScreen(BLACK);
-  gfx->setCursor(10, 60);
-  gfx->setTextColor(WHITE);
-  gfx->setTextSize(3);
-  gfx->println("SmartBracelet");
-  USBSerial.println("DONE");
+  lvgl_ui_init();
+  USBSerial.println("LVGL UI created");
 }
 
 void loop() {
-  delay(1000);
+  lv_timer_handler();
+  delay(5);
 }
