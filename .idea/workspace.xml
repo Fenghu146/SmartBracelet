@@ -25,40 +25,11 @@
       <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.pio/build/project.checksum" beforeDir="false" afterPath="$PROJECT_DIR$/.pio/build/project.checksum" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/include/pin_config.h" beforeDir="false" afterPath="$PROJECT_DIR$/include/pin_config.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/LICENSE" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/examples/IMU/LSM6DSL/LSM6DSL.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/examples/Power/ETA4662/ETA4662.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/examples/Power/SY6970/SY6970.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/examples/Touch/CST226SE/CST226SE.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/examples/Touch/CST816T/CST816T.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/examples/Touch/FT3168/FT3168.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/library.properties" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/Arduino_DriveBus.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/Arduino_DriveBus.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/Arduino_DriveBus_Library.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/Arduino_DriveBus_Library.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/Arduino_IIC.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/Arduino_IIC.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/Arduino_IIC_Chip.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/Arduino_IIC_Chip.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/hardware/Arduino_HWIIC.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/hardware/Arduino_HWIIC.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/power_chip/Arduino_ETA4662.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/power_chip/Arduino_ETA4662.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/power_chip/Arduino_SY6970.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/power_chip/Arduino_SY6970.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/touch_chip/Arduino_CST2xxSE.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/touch_chip/Arduino_CST2xxSE.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/touch_chip/Arduino_CST816x.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/touch_chip/Arduino_CST816x.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/touch_chip/Arduino_FT3x68.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Arduino_DriveBus/src/touch_chip/Arduino_FT3x68.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/platformio.ini" beforeDir="false" afterPath="$PROJECT_DIR$/platformio.ini" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/lv_port_indev.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/lv_port_indev.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/lv_port_indev.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/lv_port_indev.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/DEBUG_REPORT.md" beforeDir="false" afterPath="$PROJECT_DIR$/DEBUG_REPORT.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/DEVELOPMENT_PLAN.md" beforeDir="false" afterPath="$PROJECT_DIR$/DEVELOPMENT_PLAN.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/boards/ESP32-S3-R8-OPI.json" beforeDir="false" afterPath="$PROJECT_DIR$/boards/ESP32-S3-R8-OPI.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pin_config.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/pin_config.h" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
