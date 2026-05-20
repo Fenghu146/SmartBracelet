@@ -4,6 +4,7 @@
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
+#include <BLESecurity.h>
 
 #define DEVICE_NAME "SmartBracelet"
 #define MANUFACTURER "Waveshare"
@@ -118,6 +119,11 @@ static void setup_notification_service(BLEServer *server)
 void ble_srv_init(void)
 {
     BLEDevice::init(DEVICE_NAME);
+    BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT_NO_MITM);
+    BLESecurity *sec = new BLESecurity();
+    sec->setAuthenticationMode(ESP_LE_AUTH_NO_BOND);
+    sec->setCapability(ESP_IO_CAP_NONE);
+    sec->setInitEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
     pServer = BLEDevice::createServer();
     pServer->setCallbacks(new ServerCallbacks());
 

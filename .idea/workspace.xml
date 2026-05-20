@@ -22,14 +22,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ce9b6d86-008e-4ba8-a609-619de4057cd3" name="更改" comment="点亮屏幕，显示文字">
-      <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.pio/build/project.checksum" beforeDir="false" afterPath="$PROJECT_DIR$/.pio/build/project.checksum" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/DEBUG_REPORT.md" beforeDir="false" afterPath="$PROJECT_DIR$/DEBUG_REPORT.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/DEVELOPMENT_PLAN.md" beforeDir="false" afterPath="$PROJECT_DIR$/DEVELOPMENT_PLAN.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/boards/ESP32-S3-R8-OPI.json" beforeDir="false" afterPath="$PROJECT_DIR$/boards/ESP32-S3-R8-OPI.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/platformio.ini" beforeDir="false" afterPath="$PROJECT_DIR$/platformio.ini" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/service/ble_srv.cpp.bak" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/service/ble_srv.h.bak" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

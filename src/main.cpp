@@ -12,6 +12,7 @@
 #include "SensorQMI8658.hpp"
 #include "XPowersLib.h"
 #include "service/wifi_ntp.h"
+#include "service/ble_srv.h"
 #include <math.h>
 
 Arduino_DataBus *bus = nullptr;
@@ -29,6 +30,7 @@ static lv_obj_t *step_label = nullptr;
 static lv_obj_t *accel_label = nullptr;
 static lv_obj_t *gyro_label = nullptr;
 static lv_obj_t *wifi_icon = nullptr;
+static lv_obj_t *ble_icon = nullptr;
 static lv_obj_t *page_dots = nullptr;
 
 IMUdata acc, gyr;
@@ -84,6 +86,12 @@ static void status_bar_create(lv_obj_t *parent) {
   lv_obj_align(wifi_icon, LV_ALIGN_TOP_LEFT, 8, 6);
   lv_obj_set_style_text_font(wifi_icon, &lv_font_montserrat_10, 0);
   lv_obj_set_style_text_color(wifi_icon, lv_color_hex(0x555566), 0);
+
+  ble_icon = lv_label_create(parent);
+  lv_label_set_text(ble_icon, ")");
+  lv_obj_align(ble_icon, LV_ALIGN_TOP_LEFT, 28, 6);
+  lv_obj_set_style_text_font(ble_icon, &lv_font_montserrat_10, 0);
+  lv_obj_set_style_text_color(ble_icon, lv_color_hex(0x555566), 0);
 
   battery_label = lv_label_create(parent);
   lv_obj_align(battery_label, LV_ALIGN_TOP_RIGHT, -8, 6);
@@ -241,6 +249,7 @@ static void update_watchface(void) {
     lv_label_set_text_fmt(battery_label, "BAT %d%%", batt);
     lv_obj_set_style_text_color(battery_label,
       batt < 20 ? lv_color_hex(0xff3333) : lv_color_hex(0x888899), 0);
+    ble_srv_update_battery(batt);
   }
 
   lv_label_set_text_fmt(step_label, "Steps: %d", step_count);
@@ -340,6 +349,7 @@ void setup() {
     pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ); pmu.clearIrqStatus();
   }
 
+  ble_srv_init();
   wifi_ntp_init();
   USBSerial.println("Ready");
 }
@@ -351,6 +361,12 @@ void loop() {
   if (wifi_is_connected() && !ntp_synced) ntp_synced = wifi_ntp_sync();
   if (ntp_synced && millis() - last_ntp_attempt > 3600000) {
     last_ntp_attempt = millis(); wifi_ntp_sync();
+  }
+
+  if (ble_notification.has_new) {
+    ble_notification.has_new = 0;
+    USBSerial.printf("Notify: [%s] %s - %s\n",
+      ble_notification.app_id, ble_notification.title, ble_notification.body);
   }
 
   if (imu.getDataReady()) {
