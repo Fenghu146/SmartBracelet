@@ -13,7 +13,27 @@
       "Bash(python -m platformio pkg search ES8311)",
       "Bash(python -m platformio pkg search SensorLib)",
       "Bash(python -m platformio pkg search arduino-audio-driver)",
-      "Bash(python -m platformio pkg search lv_arduino)"
+      "Bash(python -m platformio pkg search lv_arduino)",
+      "Bash(platformio run *)",
+      "Bash(pip install *)",
+      "Bash(python -m pip install idna urllib3)",
+      "Bash(pip show *)",
+      "Bash(\"C:/Users/35015/AppData/Local/Programs/Python/Python312/python.exe\" -m pip install idna urllib3 requests)",
+      "Bash(platformio lib *)",
+      "Bash(platformio pkg *)",
+      "Bash(platformio platform *)",
+      "Bash(pio pkg *)",
+      "Bash(rm -rf \".pio/libdeps/esp32s3/GFX Library for Arduino\")",
+      "Bash(rm -rf \".pio/build/esp32s3\")",
+      "Bash(git -C /tmp/arduino_gfx_check show v1.6.5:src/databus/Arduino_ESP32SPI.h)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:docs.waveshare.net)",
+      "Bash(gh repo *)",
+      "Bash(xargs grep -l \"AXP\\\\|XPOWERS\\\\|power\")",
+      "Bash(cp -r /tmp/ws_repo/examples/Arduino/libraries/GFX_Library_for_Arduino/* lib/GFX_Library_for_Arduino/)",
+      "Bash(sed -i 's/#include \"pin_config.h\"/\\\\/\\\\/#include \"pin_config.h\"/' lib/GFX_Library_for_Arduino/src/Arduino_TFT.cpp)",
+      "WebFetch(domain:esp32.com)",
+      "WebFetch(domain:components.espressif.com)"
     ]
   }
 }
