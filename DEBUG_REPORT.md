@@ -435,3 +435,83 @@ main.cpp
 - [x] LVGL 标签文本显示正确
 - [x] 颜色字节序正确（SWAP=0）
 - [x] 内存占用在合理范围
+
+---
+
+# 第四次调试报告：LVGL 验证 + 触摸集成（2026-05-20）
+
+## 概述
+
+在之前 LVGL 集成卡住（`#include <lvgl.h>` 导致串口无输出）的基础上，重新验证并集成触摸驱动。
+
+## 关键发现
+
+### 1. 复位方式决定成败
+
+| 复位方式 | 结果 | 说明 |
+|---------|------|------|
+| `--after no_reset` + DTR 手动 toggle | ❌ 从不工作 | RTS→EN 电路在此板子上无效 |
+| `--after hard_reset` | ✅ 稳定工作 | USB RTS 信号虽显示 "Hard resetting via RTS pin..."，但实际触发了芯片冷启动 |
+
+**教训**：必须使用 `--after hard_reset`。`esptool.py` 完成时的 RTS 脉冲才是唯一可靠的复位方式。
+
+### 2. LVGL 不崩 — 是复位问题
+
+之前 `#include <lvgl.h>` 导致无串口输出，**根因是 esptool 后板子未真正启动**，不是 LVGL 导致崩溃。验证方法：
+
+1. 编译完整 LVGL 代码（`lv_init()` + `lv_port_disp_init()` + 创建 UI）
+2. 用 `--after hard_reset` 烧录
+3. 串口正确输出 `tick`（loop 中每 2s），说明 LVGL 完整流水线无崩溃
+
+### 3. 触摸引脚修复
+
+CST816S 触控芯片原定义在 `TP_SDA=19, TP_SCL=20`（与 USB D+/D- 共用 GPIO），修正为复用 I2C 传感器总线：
+
+```
+#define TP_SDA IIC_SDA    // → GPIO 15
+#define TP_SCL IIC_SCL    // → GPIO 14
+```
+
+两个 `pin_config.h`（`include/` 和 `src/`）同步修改。
+
+### 4. 触摸代码集成
+
+- `main.cpp` 添加 `#include <CST816S.h>`、`#include "lv_port_indev.h"`
+- 全局 `CST816S *touch = nullptr;`
+- setup 中 `touch = new CST816S(TP_SDA, TP_SCL, TP_RST, TP_INT);` + `touch->begin();`
+- `lv_port_indev_init()` 注册 LVGL 指针输入驱动
+
+`lv_port_indev.cpp` 的 `touchpad_read` 回调使用 `touch->available()` 检查事件，映射 `touch->data.x/y` 到 LVGL 坐标。
+
+## 当前软件架构
+
+```
+main.cpp
+  ├── Arduino_GFX (ST7789 SPI)
+  │     └── gfx->draw16bitRGBBitmap()  ← LVGL disp_flush 回调
+  ├── lv_init()
+  ├── lv_port_disp_init()              ← 显示缓冲区 + 刷新回调
+  ├── lvgl_ui_init()                   ← UI: 暗色背景 + 标签
+  ├── CST816S (I2C 15/14)
+  │     └── touch->available() / data  ← LVGL indev 回调
+  ├── lv_port_indev_init()             ← 触摸指针驱动
+  └── loop()
+        └── lv_timer_handler()          ← 每 5ms 处理 LVGL 任务
+```
+
+## 验证 Checklist
+
+- [x] LVGL 完整代码编译通过 + 烧录运行（串口 "tick" 每 2s）
+- [x] `--after hard_reset` 复位有效
+- [x] 触摸引脚修正（19/20 → 15/14）
+- [x] CST816S init 不崩溃
+- [x] lv_port_indev 注册正常
+- [ ] 屏幕实际显示 UI（深色背景 + "SmartBracelet\nLVGL Ready!"）
+- [ ] 触摸物理回馈（需硬件确认引脚焊接）
+
+## 遗留问题
+
+1. **触摸硬件连接** — CST816S 物理上若仍焊在 GPIO 19/20，IIC 总线 15/14 上无触控芯片，需确认或飞线
+2. **串口启动消息不可见** — USB CDC 重枚举慢于程序启动，setup 中的 `USBSerial.println` 总是丢失
+3. **`touch->begin()` 无错误返回** — I2C 通信失败也会静默继续，需手动验证触摸读数
+4. **CST816S 与 AXP2101 I2C 共享** — 地址不同 (0x15 vs 0x34) 理论上可共存，后续 PMU 集成时需验证

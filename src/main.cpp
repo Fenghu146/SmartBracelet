@@ -5,9 +5,12 @@
 #include <display/Arduino_ST7789.h>
 #include <lvgl.h>
 #include "lv_port_disp.h"
+#include <CST816S.h>
+#include "lv_port_indev.h"
 
 Arduino_DataBus *bus = nullptr;
 Arduino_GFX *gfx = nullptr;
+CST816S *touch = nullptr;
 
 static void lvgl_ui_init(void) {
   lv_obj_t *scr = lv_scr_act();
@@ -25,10 +28,7 @@ void setup() {
   digitalWrite(LCD_BL, HIGH);
 
   USBSerial.begin(115200);
-  unsigned long start = millis();
-  while (!USBSerial && millis() - start < 3000) {
-    delay(10);
-  }
+  delay(500);
   USBSerial.println("Booting LVGL...");
 
   bus = new Arduino_ESP32SPI(LCD_DC, LCD_CS, LCD_SCK, LCD_MOSI, GFX_NOT_DEFINED);
@@ -46,9 +46,21 @@ void setup() {
 
   lvgl_ui_init();
   USBSerial.println("LVGL UI created");
+
+  touch = new CST816S(TP_SDA, TP_SCL, TP_RST, TP_INT);
+  touch->begin();
+  USBSerial.println("Touch init OK");
+
+  lv_port_indev_init();
+  USBSerial.println("LVGL indev OK");
 }
 
 void loop() {
   lv_timer_handler();
   delay(5);
+  static unsigned long last = 0;
+  if (millis() - last > 2000) {
+    last = millis();
+    USBSerial.println("tick");
+  }
 }
