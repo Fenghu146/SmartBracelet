@@ -373,11 +373,20 @@ void loop() {
     ble_srv_send(reply);
   }
 
-  // Serial-to-BLE: any input sends immediately
-  while (USBSerial.available()) {
+  // Serial-to-BLE: buffer until Enter, support UTF-8 Chinese
+  static char serial_buf[256];
+  static int serial_len = 0;
+  while (USBSerial.available() && serial_len < 255) {
     char c = USBSerial.read();
-    char one[2] = {c, 0};
-    ble_srv_send(one);
+    if (c == '\n' || c == '\r') {
+      if (serial_len > 0) {
+        serial_buf[serial_len] = 0;
+        ble_srv_send(serial_buf);
+        serial_len = 0;
+      }
+    } else {
+      serial_buf[serial_len++] = c;
+    }
   }
 
   if (imu.getDataReady()) {
