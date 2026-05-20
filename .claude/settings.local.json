@@ -56,7 +56,11 @@
       "Bash(cp /tmp/waveshare_esp32s3/examples/Arduino/libraries/SensorLib/src/SensorQMI8658.hpp lib/SensorLib-Waveshare/src/)",
       "Bash(cp /tmp/waveshare_esp32s3/examples/Arduino/libraries/SensorLib/src/SensorCommon.tpp lib/SensorLib-Waveshare/src/)",
       "Bash(cp /tmp/waveshare_esp32s3/examples/Arduino/libraries/SensorLib/src/SensorLib.h lib/SensorLib-Waveshare/src/)",
-      "Bash(cp /tmp/waveshare_esp32s3/examples/Arduino/libraries/SensorLib/src/SensorRTC.h lib/SensorLib-Waveshare/src/)"
+      "Bash(cp /tmp/waveshare_esp32s3/examples/Arduino/libraries/SensorLib/src/SensorRTC.h lib/SensorLib-Waveshare/src/)",
+      "Bash(cp -r /tmp/waveshare_esp32s3/examples/ESP-IDF/01_AXP2101/components/XPowersLib/src/REG/ lib/XPowersLib/src/)",
+      "Bash(cp /tmp/waveshare_esp32s3/examples/ESP-IDF/01_AXP2101/components/XPowersLib/src/XPowers*.tpp lib/XPowersLib/src/)",
+      "Bash(cp /tmp/waveshare_esp32s3/examples/ESP-IDF/01_AXP2101/components/XPowersLib/src/XPowers*.cpp lib/XPowersLib/src/)",
+      "Bash(cp /tmp/waveshare_esp32s3/examples/ESP-IDF/01_AXP2101/components/XPowersLib/src/XPowers*.hpp lib/XPowersLib/src/)"
     ]
   }
 }

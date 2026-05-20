@@ -10,12 +10,14 @@
 #include <Wire.h>
 #include "SensorPCF85063.hpp"
 #include "SensorQMI8658.hpp"
+#include "XPowersLib.h"
 
 Arduino_DataBus *bus = nullptr;
 Arduino_GFX *gfx = nullptr;
 CST816S *touch = nullptr;
 SensorPCF85063 rtc;
 SensorQMI8658 imu;
+XPowersPMU pmu;
 
 static void lvgl_ui_init(void) {
   lv_obj_t *scr = lv_scr_act();
@@ -91,6 +93,39 @@ void setup() {
     USBSerial.println("IMU init FAIL");
   }
 
+  if (pmu.begin(Wire, AXP2101_SLAVE_ADDRESS, IIC_SDA, IIC_SCL)) {
+    USBSerial.println("PMU init OK");
+    pmu.disableDC2();
+    pmu.disableDC3();
+    pmu.disableDC4();
+    pmu.disableDC5();
+    pmu.disableALDO2();
+    pmu.disableALDO3();
+    pmu.disableALDO4();
+    pmu.disableBLDO1();
+    pmu.disableBLDO2();
+    pmu.disableCPUSLDO();
+    pmu.disableDLDO1();
+    pmu.disableDLDO2();
+    pmu.setDC1Voltage(3300);
+    pmu.enableDC1();
+    pmu.setALDO1Voltage(3300);
+    pmu.enableALDO1();
+    pmu.enableVbusVoltageMeasure();
+    pmu.enableBattVoltageMeasure();
+    pmu.enableSystemVoltageMeasure();
+    pmu.disableTSPinMeasure();
+    pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
+    pmu.clearIrqStatus();
+    pmu.setPrechargeCurr(XPOWERS_AXP2101_PRECHARGE_50MA);
+    pmu.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_400MA);
+    pmu.setChargerTerminationCurr(XPOWERS_AXP2101_CHG_ITERM_25MA);
+    pmu.setChargeTargetVoltage(XPOWERS_AXP2101_CHG_VOL_4V2);
+    USBSerial.println("PMU configured");
+  } else {
+    USBSerial.println("PMU init FAIL");
+  }
+
   USBSerial.println("All done");
 }
 
@@ -127,6 +162,10 @@ void loop() {
       if (imu.getGyroscope(gyr.x, gyr.y, gyr.z)) {
         USBSerial.printf(" G%.2f,%.2f,%.2f", gyr.x, gyr.y, gyr.z);
       }
+    }
+    int batt = pmu.getBatteryPercent();
+    if (batt >= 0) {
+      USBSerial.printf(" B%d%%", batt);
     }
     USBSerial.println();
   }
