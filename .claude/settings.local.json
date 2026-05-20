@@ -33,7 +33,22 @@
       "Bash(cp -r /tmp/ws_repo/examples/Arduino/libraries/GFX_Library_for_Arduino/* lib/GFX_Library_for_Arduino/)",
       "Bash(sed -i 's/#include \"pin_config.h\"/\\\\/\\\\/#include \"pin_config.h\"/' lib/GFX_Library_for_Arduino/src/Arduino_TFT.cpp)",
       "WebFetch(domain:esp32.com)",
-      "WebFetch(domain:components.espressif.com)"
+      "WebFetch(domain:components.espressif.com)",
+      "Bash(rtk ls *)",
+      "Bash(rtk git *)",
+      "Bash(rtk pio *)",
+      "Bash(rtk read *)",
+      "Bash(rtk grep *)",
+      "Bash(python __TRACKED_VAR__/.platformio/packages/tool-esptoolpy/esptool.py --chip esp32s3 --port COM9 --baud 115200 flash_id)",
+      "Bash(python __TRACKED_VAR__/.platformio/packages/tool-esptoolpy/esptool.py --chip esp32s3 --port COM9 --baud 115200 erase_flash)",
+      "Bash(python __TRACKED_VAR__/.platformio/packages/tool-esptoolpy/esptool.py --chip esp32s3 --port COM9 --baud 115200 --before default_reset --after hard_reset write_flash -z --flash_mode qio --flash_freq 80m --flash_size 16MB 0x0 .pio/build/esp32s3/bootloader.bin 0x8000 .pio/build/esp32s3/partitions.bin 0x10000 .pio/build/esp32s3/firmware.bin)",
+      "Bash(timeout 8 pio device monitor --port COM9 --baud 115200)",
+      "Bash(python -c ' *)",
+      "Bash(python __TRACKED_VAR__/.platformio/packages/tool-esptoolpy/esptool.py --chip esp32s3 --port COM9 --baud 115200 read_mac)",
+      "Bash(python __TRACKED_VAR__/.platformio/packages/tool-esptoolpy/esptool.py --chip esp32s3 --port COM9 --baud 115200 verify_flash --flash_mode qio --flash_freq 80m --flash_size 16MB 0x0 .pio/build/esp32s3/bootloader.bin 0x8000 .pio/build/esp32s3/partitions.bin 0x10000 .pio/build/esp32s3/firmware.bin)",
+      "Bash(git rm *)",
+      "Bash(xtensa-esp32s3-elf-size -A .pio/build/esp32s3/firmware.elf)",
+      "Bash(python __TRACKED_VAR__/.platformio/packages/tool-esptoolpy/esptool.py --chip esp32s3 image_info .pio/build/esp32s3/firmware.bin)"
     ]
   }
 }
