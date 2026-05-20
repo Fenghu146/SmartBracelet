@@ -60,7 +60,9 @@
       "Bash(cp -r /tmp/waveshare_esp32s3/examples/ESP-IDF/01_AXP2101/components/XPowersLib/src/REG/ lib/XPowersLib/src/)",
       "Bash(cp /tmp/waveshare_esp32s3/examples/ESP-IDF/01_AXP2101/components/XPowersLib/src/XPowers*.tpp lib/XPowersLib/src/)",
       "Bash(cp /tmp/waveshare_esp32s3/examples/ESP-IDF/01_AXP2101/components/XPowersLib/src/XPowers*.cpp lib/XPowersLib/src/)",
-      "Bash(cp /tmp/waveshare_esp32s3/examples/ESP-IDF/01_AXP2101/components/XPowersLib/src/XPowers*.hpp lib/XPowersLib/src/)"
+      "Bash(cp /tmp/waveshare_esp32s3/examples/ESP-IDF/01_AXP2101/components/XPowersLib/src/XPowers*.hpp lib/XPowersLib/src/)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:gitee.com)"
     ]
   }
 }
