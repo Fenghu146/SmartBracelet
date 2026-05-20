@@ -11,6 +11,7 @@
 #include "SensorPCF85063.hpp"
 #include "SensorQMI8658.hpp"
 #include "XPowersLib.h"
+#include "service/wifi_ntp.h"
 
 Arduino_DataBus *bus = nullptr;
 Arduino_GFX *gfx = nullptr;
@@ -26,6 +27,8 @@ static lv_obj_t *battery_label = nullptr;
 static lv_obj_t *step_label = nullptr;
 static lv_obj_t *accel_label = nullptr;
 static lv_obj_t *gyro_label = nullptr;
+static lv_obj_t *wifi_icon = nullptr;
+
 
 IMUdata acc, gyr;
 static int last_batt = -1;
@@ -42,7 +45,24 @@ static const float STEP_THRESHOLD = 0.4f;
 // Screens
 static lv_obj_t *pages[2];
 
+// NTP sync timer
+static unsigned long last_ntp_attempt = 0;
+static bool ntp_synced = false;
+
+void set_rtc_from_tm(struct tm *ti)
+{
+  rtc.setDateTime(ti->tm_year + 1900, ti->tm_mon + 1, ti->tm_mday,
+    ti->tm_hour, ti->tm_min, ti->tm_sec);
+  USBSerial.println("RTC: time updated from NTP");
+}
+
 static void status_bar_create(lv_obj_t *parent) {
+  wifi_icon = lv_label_create(parent);
+  lv_label_set_text(wifi_icon, "~");
+  lv_obj_align(wifi_icon, LV_ALIGN_TOP_LEFT, 8, 6);
+  lv_obj_set_style_text_font(wifi_icon, &lv_font_montserrat_10, 0);
+  lv_obj_set_style_text_color(wifi_icon, lv_color_hex(0x555566), 0);
+
   battery_label = lv_label_create(parent);
   lv_obj_align(battery_label, LV_ALIGN_TOP_RIGHT, -8, 6);
   lv_obj_set_style_text_font(battery_label, &lv_font_montserrat_12, 0);
@@ -127,7 +147,6 @@ static void switch_page(int dir) {
   lv_scr_load_anim(next > current_page - dir ? pages[next] : pages[next],
     dir > 0 ? LV_SCR_LOAD_ANIM_MOVE_LEFT : LV_SCR_LOAD_ANIM_MOVE_RIGHT,
     200, 0, false);
-  // Update page dots
 }
 
 static void update_watchface(void) {
@@ -152,6 +171,11 @@ static void update_watchface(void) {
   }
 
   lv_label_set_text_fmt(step_label, "Steps: %d", step_count);
+
+  if (wifi_icon) {
+    lv_obj_set_style_text_color(wifi_icon,
+      wifi_is_connected() ? lv_color_hex(0x00d4ff) : lv_color_hex(0x333344), 0);
+  }
 }
 
 static void handle_gesture(void) {
@@ -229,13 +253,25 @@ void setup() {
     pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ); pmu.clearIrqStatus();
   } else { USBSerial.println("PMU FAIL"); }
 
+  wifi_ntp_init();
+
   USBSerial.println("Ready");
 }
 
 void loop() {
   lv_timer_handler();
 
-  // Read IMU at ~200Hz for step counting
+  wifi_ntp_loop();
+
+  if (wifi_is_connected() && !ntp_synced) {
+    ntp_synced = wifi_ntp_sync();
+  }
+
+  if (ntp_synced && millis() - last_ntp_attempt > 3600000) {
+    last_ntp_attempt = millis();
+    wifi_ntp_sync();
+  }
+
   if (imu.getDataReady()) {
     imu.getAccelerometer(acc.x, acc.y, acc.z);
     imu.getGyroscope(gyr.x, gyr.y, gyr.z);
@@ -249,7 +285,6 @@ void loop() {
     if (current_page == 1) update_sensor_page();
   }
 
-  // Gesture handling
   if (touch && touch->available()) {
     if (touch->data.x > 0 || touch->data.y > 0) {
       handle_gesture();
