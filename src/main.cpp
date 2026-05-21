@@ -679,10 +679,27 @@ void loop() {
     }
   }
 
-  if (touch && touch->available()) {
-    if (touch->data.x > 0 || touch->data.y > 0) {
+  // Gesture handling: read from touch data (already populated by LVGL via touchpad_read)
+  // Don't call touch->available() here — it would steal data from LVGL's input driver.
+  if (touch) {
+    static uint8_t last_gesture = 0xFF;
+    static bool last_pressed = false;
+    uint8_t g = touch->data.gestureID;
+    bool pressed = (touch->data.event == 0) &&
+                   (touch->data.x > 0 || touch->data.y > 0);
+
+    // Any touch press resets timer and wakes screen
+    if (pressed && !last_pressed) {
       reset_activity_timer();
-      handle_gesture();
+    }
+    last_pressed = pressed;
+
+    // Handle swipe gestures (page navigation)
+    if (g != last_gesture) {
+      last_gesture = g;
+      if (g == SWIPE_LEFT || g == SWIPE_RIGHT) {
+        handle_gesture();
+      }
     }
   }
 

@@ -872,6 +872,35 @@ acc → 低通滤波 (α=0.02, ~0.5s) → gravity vector
 
 ---
 
+### 第 9 阶段：秒表/倒计时 + 天气显示
+
+**新增功能**：
+
+| 功能 | 实现 |
+|------|------|
+| 秒表/倒计时 | `src/stopwatch.h/.cpp` — 第 5 页，双模式，Start/Stop/Reset/Mode 按钮，`millis()` 计时，倒计时刻度+10s，到 0 红色闪烁 |
+| 天气显示 | `src/weather.h/.cpp` — 第 6 页，Open-Meteo API (免费免 Key) HTTPS GET，温度/湿度/天气状况，每 10 分钟自动刷新 |
+
+**修复**：
+
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| 按钮不响应 / 息屏点不亮 | `loop()` 中 `touch->available()` 清掉 `_event_available`，LVGL 拿不到触控数据 | 改为读 `touch->data.gestureID` (LVGL 已填入)，不调 `available()`，用 `last_gesture`/`last_pressed` 去重 |
+| 温度显示 "f C" | `lv_conf.h` 中 `LV_SPRINTF_USE_FLOAT 0`，LVGL 不支持 `%f` | 改用整数格式化 `(int)(temp*10) → %d.%d` |
+| 天气无数据 | `weather_create()` 在 `init_pages()` 阶段调用时 WiFi 未连 | `weather_update()` 中检测 `!has_data && WiFi` 时自动重试 |
+
+**新依赖**：
+- `bblanchon/ArduinoJson @ ^7.0.0` (platformio.ini)
+
+**资源**：
+
+| 指标 | 数值 |
+|------|------|
+| RAM | 149KB / 320KB (45.6%) |
+| Flash | 1.8MB / 3.3MB (54.1%) |
+
+---
+
 ## Session 10: 边缘 AI 训练管道搭建 (2026-05-21)
 
 **目标**：建立完整的边缘 AI 训练工作流，从数据采集到 TFLite 模型部署的 Python 工具链。

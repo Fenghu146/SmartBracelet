@@ -118,11 +118,16 @@ void weather_create(lv_obj_t *parent) {
 
 void weather_update(void) {
   if (!has_data) {
-    lv_label_set_text(status_label, "No data, tap to refresh");
+    if (wifi_is_connected()) {
+      weather_fetch();
+    } else {
+      lv_label_set_text(status_label, "No WiFi");
+    }
     return;
   }
 
-  lv_label_set_text_fmt(temp_label, "%.1f C", last_temp);
+  int temp_int = (int)(last_temp * 10);
+  lv_label_set_text_fmt(temp_label, "%d.%d C", temp_int / 10, abs(temp_int) % 10);
   lv_label_set_text_fmt(humid_label, "Humidity: %d%%", last_humid);
   lv_label_set_text(cond_label, wmo_code_str(last_code));
 
