@@ -31,9 +31,9 @@ def load_csv(path):
     if raw.ndim == 1:
         raw = raw.reshape(1, -1)
     data = raw[:, :6].astype(np.float32)
-    labels = np.array([LABEL_NAMES.get(int(l), -1) for l in raw[:, 6]])
-    valid = labels >= 0
-    return data[valid], labels[valid]
+    label_vals = np.array([int(float(l)) for l in raw[:, 6]])
+    valid = np.isin(label_vals, list(LABEL_NAMES.keys()))
+    return data[valid], label_vals[valid]
 
 
 def extract_features(window):
