@@ -13,7 +13,8 @@
 5. [模型导出到 TFLite](#5-模型导出到-tflite)
 6. [设备端推理集成](#6-设备端推理集成)
 7. [任务优先级路线图](#7-任务优先级路线图)
-8. [附录：工具链安装](#8-附录工具链安装)
+8. [最小 Demo：30 分钟跑通闭环](#8-最小-demo30-分钟跑通闭环)
+9. [附录：工具链安装](#9-附录工具链安装)
 
 ---
 
@@ -22,34 +23,31 @@
 | 项目     | 规格                                         |
 | ------ | ------------------------------------------ |
 | 主控     | ESP32-S3 (240MHz LX7 双核, **支持 PIE 向量指令集**) |
-| PSRAM  | 8MB OPI — 可承载 ~2~3MB 模型                    |
-| Flash  | 16MB — 当前用掉 1.6MB，空余 ~14MB                 |
-| RAM 余量 | 当前 148KB/320KB (45%)，剩 ~170KB              |
+| PSRAM  | **不可用**（`BOARD_HAS_PSRAM` 注释掉，初始化失败）      |
+| Flash  | 16MB — 当前用掉 1.8MB，空余 ~13MB                 |
+| RAM 余量 | 当前 149KB/320KB (45.6%)，剩 ~170KB             |
 | 传感器    | QMI8658 6轴 IMU (加速度计 1000Hz, 陀螺仪 897Hz)    |
 | 关键特性   | HW FIFO (128 样本), 硬件计步器/双击/运动检测            |
-| 开发环境   | PyTorch 2.11 + CUDA 128 已安装，需补充 TensorFlow |
+| 开发环境   | PyTorch 2.11 + CUDA 128 已安装                 |
 
-### AI 加速能力
+### ⚠️ PSRAM 不可用 — 关键约束
 
-ESP32-S3 提供 **PIE 向量指令集**：
+计划中 Tensor Arena 原定 100KB 放 PSRAM，但此板 PSRAM 初始化失败。100KB arena 在 DRAM 中占剩余 170KB 的 **60%**，加上 LVGL heap (64KB) 和 BLE/WiFi 栈 (~30KB) 后相当紧张。
 
-- 单周期 MAC 操作
-- 8/16-bit 定点加速
-- SIMD 向量处理
-- 配合 **ESP-NN** 库获得接近 DSP 的推理性能
+**应对策略**：
+- 模型尽量小（< 30KB），arena 降至 **60KB**
+- 或先不做 TFLite，改用 **决策树 C 数组导出**（零 arena 开销）
 
-### 内存预算分析
+### 内存预算分析（PSRAM 不可用版）
 
 | 组件                  | RAM        | Flash     |
 | ------------------- | ---------- | --------- |
-| 模型 (INT8, ~60KB)    | —          | 60KB      |
-| Tensor Arena        | 100KB      | —         |
-| 环形缓冲区 (50×6 floats) | 1.2KB      | —         |
-| 推理中间变量              | ~10KB      | —         |
-| **AI 总计**           | **~115KB** | **~60KB** |
-| 当前空闲                | ~170KB     | ~14MB     |
-
-> **关键瓶颈是 RAM** — Tensor Arena 建议放 PSRAM。
+| 模型 (INT8, ~30KB)    | —          | 30KB      |
+| Tensor Arena        | 60KB       | —         |
+| 环形缓冲区 (50×6 float) | 1.2KB      | —         |
+| 推理中间变量              | ~5KB       | —         |
+| **AI 总计**           | **~66KB**  | **~30KB** |
+| 当前空闲                | ~170KB     | ~13MB     |
 
 ---
 
@@ -73,21 +71,18 @@ if (data_collection_mode) {
 
 | 方面      | 推荐方案                                     | 原因                                   |
 | ------- | ---------------------------------------- | ------------------------------------ |
-| 传输方式    | USB CDC (USBSerial) @ 921600             | 已有且稳定，带宽够 1000Hz × 6 floats ≈ 57KB/s |
+| 传输方式    | USB CDC (USBSerial) @ **115200**         | 921600 在此板不稳定，115200 足够 50Hz × 6 floats |
 | 数据格式    | CSV: `timestamp,ax,ay,az,gx,gy,gz,label` | Python pandas 直接读                    |
-| 标注方式    | 串口输入数字编号 (如 `1`=走路, `2`=跑步)              | 实时标注，无需后期对齐                          |
+| 标注方式    | **串口输入数字编号** 或 **触摸屏点选**              | 触摸屏更方便：显示活动列表，点即标                     |
 | 采样率     | 降采样到 **50Hz** (每 N 帧取 1 帧)               | 大部分活动识别 20-50Hz 足够                   |
-| FIFO 利用 | 使能 HW FIFO 批量读取 (每次 32 样本)               | 减少 I2C 开销                            |
 
 ### 2.2 Python 端：采集脚本
 
 ```python
-# collect_data.py
-import serial
-import csv
-import datetime
+# collect_data.py — 115200 波特率
+import serial, csv, datetime
 
-ser = serial.Serial('COM9', 921200, timeout=1)
+ser = serial.Serial('COM9', 115200, timeout=1)
 label_map = {'1': 'walk', '2': 'run', '3': 'wave', '4': 'idle',
              '5': 'flick', '6': 'circle', '7': 'sit', '8': 'fall'}
 
@@ -97,7 +92,6 @@ current_label = "idle"
 with open(filename, 'w', newline='') as f:
     writer = csv.writer(f)
     writer.writerow(['timestamp', 'ax', 'ay', 'az', 'gx', 'gy', 'gz', 'label'])
-
     while True:
         if ser.in_waiting:
             line = ser.readline().decode().strip()
@@ -115,13 +109,9 @@ with open(filename, 'w', newline='') as f:
 
 ### 3.1 滑动窗口
 
-IMU 时间序列 → 固定长度窗口：
-
 ```python
 def create_windows(data, window_size=50, stride=25):
-    """
-    IMU 50Hz, window_size=50 → 1秒窗口, stride=25 → 50% 重叠
-    """
+    """50Hz → 1秒窗口, 50% 重叠"""
     X, y = [], []
     for i in range(0, len(data) - window_size, stride):
         window = data[i:i+window_size, 0:6]
@@ -133,93 +123,57 @@ def create_windows(data, window_size=50, stride=25):
 
 | 任务           | 窗口长度       | 步长         | 传感器       |
 | ------------ | ---------- | ---------- | --------- |
-| 活动识别 (走/跑/坐) | 2秒 (100帧)  | 1秒 (50帧)   | acc + gyr |
-| 手势识别 (挥手/画圈) | 1秒 (50帧)   | 0.5秒 (25帧) | acc + gyr |
-| 跌倒检测         | 3秒 (150帧)  | —          | acc 原始高G  |
-| 计步改进         | 0.5秒 (25帧) | 实时滑动       | acc 幅值    |
-
-### 3.2 数据增强
-
-```python
-def augment_window(window):
-    # 1. 高斯噪声
-    noise = np.random.normal(0, 0.01, window.shape)
-    # 2. 时间扭曲 (随机缩放)
-    scale = np.random.uniform(0.9, 1.1)
-    # 3. 轴旋转 (绕重力方向小角度)
-    angle = np.random.uniform(-5, 5)
-    return window + noise
-```
+| 活动识别 (走/跑/静止) | 1秒 (50帧)   | 0.5秒 (25帧) | acc + gyr |
+| 手势识别 (挥手/画圈)  | 1秒 (50帧)   | 0.5秒 (25帧) | acc + gyr |
+| 跌倒检测         | 3秒 (150帧)  | —          | acc       |
 
 ---
 
 ## 4. 模型训练
 
-### 4.1 推荐模型架构
+### 4.1 推荐模型架构：超轻量 1D-CNN
 
-#### 方案 A：轻量 1D-CNN（推荐首选）
-
-参数量 ~15K，模型大小 ~60KB INT8，推理时间 ~5ms：
+参数量 ~5K，模型大小 **~20KB INT8**，推理时间 ~2ms：
 
 ```python
 import torch
 import torch.nn as nn
 
 class TinyHAR(nn.Module):
-    def __init__(self, n_channels=6, n_classes=4):
+    def __init__(self, n_channels=6, n_classes=3):  # walk/run/静止
         super().__init__()
-        self.conv1 = nn.Conv1d(n_channels, 16, kernel_size=7, padding='same')
-        self.bn1 = nn.BatchNorm1d(16)
-        self.conv2 = nn.Conv1d(16, 32, kernel_size=5, padding='same')
-        self.bn2 = nn.BatchNorm1d(32)
-        self.conv3 = nn.Conv1d(32, 64, kernel_size=3, padding='same')
-        self.bn3 = nn.BatchNorm1d(64)
+        self.conv1 = nn.Conv1d(n_channels, 8, kernel_size=5, padding='same')
+        self.bn1 = nn.BatchNorm1d(8)
+        self.conv2 = nn.Conv1d(8, 16, kernel_size=3, padding='same')
+        self.bn2 = nn.BatchNorm1d(16)
         self.pool = nn.AdaptiveAvgPool1d(1)
-        self.fc = nn.Linear(64, n_classes)
+        self.fc = nn.Linear(16, n_classes)
 
     def forward(self, x):
         x = x.permute(0, 2, 1)
         x = torch.relu(self.bn1(self.conv1(x)))
         x = torch.relu(self.bn2(self.conv2(x)))
-        x = torch.relu(self.bn3(self.conv3(x)))
         x = self.pool(x).squeeze(-1)
         return self.fc(x)
 ```
 
-#### 方案 B：TCN（更高精度）
-
-参数量 ~25K，模型大小 ~100KB INT8：
-
-```python
-class TinyTCN(nn.Module):
-    def __init__(self, n_channels=6, n_classes=4):
-        super().__init__()
-        self.conv1 = nn.Conv1d(n_channels, 16, 3, dilation=1, padding=1)
-        self.conv2 = nn.Conv1d(16, 32, 3, dilation=2, padding=2)
-        self.conv3 = nn.Conv1d(32, 64, 3, dilation=4, padding=4)
-        self.pool = nn.AdaptiveAvgPool1d(1)
-        self.fc = nn.Linear(64, n_classes)
-```
+> 相比原版 3 层卷积（15K params），改为 2 层（5K params），INT8 后 ~20KB，arena 可降至 60KB。
 
 ### 4.2 训练流程
 
 ```python
 # train.py
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader, TensorDataset
-
 X_train, y_train = load_windows("imu_data_walk_run_idle.csv")
 X_train = torch.FloatTensor(X_train)
 y_train = torch.LongTensor(y_train)
 dataset = TensorDataset(X_train, y_train)
 loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-model = TinyHAR(n_classes=4)
+model = TinyHAR(n_classes=3)
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-for epoch in range(50):
+for epoch in range(30):
     for X_batch, y_batch in loader:
         optimizer.zero_grad()
         outputs = model(X_batch)
@@ -234,57 +188,59 @@ for epoch in range(50):
 
 | 任务              | 类数  | 预期准确率 | 模型大小 (INT8) | 推理时间  |
 | --------------- | --- | ----- | ----------- | ----- |
-| 4 活动 (走/跑/坐/静止) | 4   | 95%+  | ~60KB       | 3-5ms |
-| 手势 (挥手/画圈/双击/无) | 4   | 90%+  | ~60KB       | 3-5ms |
-| 跌倒检测            | 2   | 97%+  | ~30KB       | 2-3ms |
+| 3 活动 (走/跑/静止)  | 3   | 95%+  | ~20KB       | 2-3ms |
+| 手势 (挥手/画圈/无)   | 3   | 90%+  | ~20KB       | 2-3ms |
+| 跌倒检测            | 2   | 97%+  | ~15KB       | 1-2ms |
 
 ---
 
 ## 5. 模型导出到 TFLite
 
+### 简化导出路线（无需 TensorFlow）
+
+```
+PyTorch → ONNX → onnx2tf → TFLite
+```
+
+```bash
+pip install onnx onnxruntime onnx2tf
+```
+
 ```python
 # convert.py
 import torch
 import onnx
-import tensorflow as tf
 
 # PyTorch → ONNX
-torch.onnx.export(model, dummy_input, "model.onnx",
-                  input_names=['input'], output_names=['output'],
-                  dynamic_axes={'input': {0: 'batch', 1: 'window'}})
+dummy = torch.randn(1, 50, 6)
+torch.onnx.export(model, dummy, "model.onnx",
+                  input_names=['input'], output_names=['output'])
 
-# ONNX → TensorFlow
-import onnx_tf
-tf_model = onnx_tf.backend.prepare(onnx.load("model.onnx"))
-tf_model.export_graph("model_savedmodel")
-
-# TensorFlow → TFLite (INT8 量化)
-converter = tf.lite.TFLiteConverter.from_saved_model("model_savedmodel")
-
-def representative_dataset():
-    for i in range(100):
-        yield [X_calib[i:i+1].numpy().astype(np.float32)]
-
-converter.optimizations = [tf.lite.Optimize.DEFAULT]
-converter.representative_dataset = representative_dataset
-converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
-converter.inference_input_type = tf.int8
-converter.inference_output_type = tf.int8
-
-tflite_model = converter.convert()
-with open("model_int8.tflite", "wb") as f:
-    f.write(tflite_model)
-
-print(f"Model size: {len(tflite_model) / 1024:.1f} KB")
+# ONNX → TFLite (使用 onnx2tf)
+import onnx2tf
+onnx2tf.convert(
+    input_model="model.onnx",
+    output_folder_path="tflite_model",
+    quant_static=True,
+    calibration_data=X_calib_numpy  # INT8 量化校准数据
+)
+# 输出: tflite_model/model_float16.tflite
 ```
 
-**转换路线图：**
+或者用 **ai_edge_torch**（Google 官方，直接 PyTorch → TFLite，跳过 ONNX）：
 
-```
-PyTorch (训练) → ONNX (桥接) → TensorFlow SavedModel → TFLite (INT8量化)
+```bash
+pip install ai-edge-torch
 ```
 
-> **为什么不直接 PyTorch → TFLite？** TFLite 的生态最成熟，ESP32-S3 有专门的 `tflite-micro` 支持和 ESP-NN 加速。
+```python
+import ai_edge_torch
+import torch
+
+# ai_edge_torch 直接 PyTorch → TFLite INT8
+edge_model = ai_edge_torch.convert(model.eval(), (dummy,))
+edge_model.export("model_int8.tflite")
+```
 
 ### 模型转 C 数组
 
@@ -305,159 +261,154 @@ with open("model_int8.tflite", "rb") as f:
 
 ## 6. 设备端推理集成
 
-### 6.1 PlatformIO 配置
+### 6.1 PlatformIO 配置（无需 PSRAM 版）
 
 ```ini
 [env:esp32s3]
-platform = espressif32@6.9.0
-board = esp32-s3-devkitc-1
-framework = arduino
-board_build.flash_mode = qio
-board_build.psram = enable
-board_build.psram_mode = opi
-board_build.psram_frequency = 80m
 lib_deps =
     fbiego/CST816S
     lvgl/lvgl@^8.4.0
-    tflite-micro[tflm];esp32
-lib_extra_dirs = lib
-build_flags =
-    -DBOARD_HAS_PSRAM
-    -DCONFIG_SPIRAM_MODE_OCT
-    -mfix-esp32-psram-cache-issue
+    bblanchon/ArduinoJson @ ^7.0.0
+    # TFLite Micro — 建议先不做，用最小 Demo 方案替代
 ```
 
-### 6.2 推理引擎初始化
+### 6.2 推理引擎初始化（TFLite Micro 路线）
 
 ```cpp
 #include <TensorFlowLite_ESP32.h>
 #include "model.h"
 
-static const int tensor_arena_size = 100 * 1024;
+static const int tensor_arena_size = 60 * 1024;  // 缩减至 60KB
 static uint8_t tensor_arena[tensor_arena_size];
-
-static tflite::MicroErrorReporter micro_error;
-static tflite::MicroInterpreter *interpreter = nullptr;
-static TfLiteTensor *input = nullptr, *output = nullptr;
 
 void ai_init() {
     static tflite::Model* model = tflite::GetModel(model_data);
-    if (model->version() != TFLITE_SCHEMA_VERSION) return;
-
-    static tflite::MicroMutableOpResolver<10> resolver;
+    static tflite::MicroMutableOpResolver<6> resolver;
     resolver.AddConv2D();
     resolver.AddAveragePool2D();
     resolver.AddFullyConnected();
-    resolver.AddSoftmax();
-
-    static tflite::MicroInterpreter static_interpreter(
-        model, resolver, tensor_arena, tensor_arena_size, &micro_error);
-    interpreter = &static_interpreter;
-
-    input = interpreter->input(0);
-    output = interpreter->output(0);
+    static tflite::MicroInterpreter interpreter(
+        model, resolver, tensor_arena, tensor_arena_size);
+    interpreter->AllocateTensors();
 }
 ```
 
-### 6.3 推理调用
+### 6.3 环形缓冲区（滑动窗口）
 
-```cpp
-int ai_predict(const float window[50][6]) {
-    for (int i = 0; i < 50 * 6; i++) {
-        float val = ((float*)window)[i];
-        input->data.int8[i] = (int8_t)(
-            val / input->params.scale + input->params.zero_point);
-    }
-
-    interpreter->Invoke();
-
-    int best_class = 0;
-    int8_t best_score = output->data.int8[0];
-    for (int c = 1; c < output->dims->data[1]; c++) {
-        if (output->data.int8[c] > best_score) {
-            best_score = output->data.int8[c];
-            best_class = c;
-        }
-    }
-    return best_class;
-}
-```
-
-### 6.4 环形缓冲区（滑动窗口）
-
-```cpp
-class IMUBuffer {
-    static const int WINDOW = 50;
-    static const int STRIDE = 25;
-    float buf[WINDOW][6];
-    int head = 0;
-    int count = 0;
-
-public:
-    void push(float ax, float ay, float az,
-              float gx, float gy, float gz) {
-        buf[head][0] = ax; buf[head][1] = ay; buf[head][2] = az;
-        buf[head][3] = gx; buf[head][4] = gy; buf[head][5] = gz;
-        head = (head + 1) % WINDOW;
-        if (count < WINDOW) count++;
-    }
-
-    bool ready() { return count >= WINDOW; }
-
-    float* get_window() {
-        static float win[WINDOW][6];
-        for (int i = 0; i < WINDOW; i++) {
-            int idx = (head + i) % WINDOW;
-            memcpy(win[i], buf[idx], 6 * sizeof(float));
-        }
-        return (float*)win;
-    }
-};
-```
+沿用计划中的 `IMUBuffer` 类，WINDOW=50, STRIDE=25。
 
 ---
 
 ## 7. 任务优先级路线图
 
-### 时间线
-
-```
-第1周 ────── 第2周 ────── 第3周 ────── 第4周
-┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐
-│ 数据采集     │ │ 模型训练     │ │ TFLite 集成 │ │ 优化 + 测试  │
-│            │ │            │ │            │ │            │
-│ 固件CSV模式  │ │ PyTorch    │ │ 推理引擎     │ │ ESP-NN     │
-│ 采集脚本     │ │ 1D-CNN     │ │ 模型嵌入     │ │ 功耗测量     │
-│ 数据集标注   │ │ ONNX→TFL   │ │ 环形缓冲区   │ │ 混淆矩阵     │
-│ 数据增强     │ │ INT8量化    │ │ 结果后处理   │ │ 实测验证     │
-└────────────┘ └────────────┘ └────────────┘ └────────────┘
-```
-
-### 并行工作流
-
-- **轨道 A（固件）**：周1 数据采集模式 → 周3 环形缓冲区 → 周末 TFLite 集成
-- **轨道 B（Python）**：周1 采集 → 周2 训练 → 周3 导出 → 周4 微调
-
 ### 第一迭代推荐
 
 | 任务              | 类   | 优先级 | 难度  | 理由              |
 | --------------- | --- | --- | --- | --------------- |
-| 活动分类 (走/跑/坐/静止) | 4   | P0  | ⭐⭐  | 数据好标，模型小，效果立竿见影 |
-| 手势控制 (翻腕/甩腕)    | 2-3 | P1  | ⭐⭐⭐ | 替代当前阈值抬手亮屏      |
-| 跌倒检测 (跌倒/正常)    | 2   | P1  | ⭐⭐  | 安全功能，二分类简单      |
-| 计步改进            | 回归  | P2  | ⭐⭐⭐ | 当前启发式算法已经可用     |
-
-> **强烈建议从活动分类开始** — 只需 10-15 分钟标注数据就能训练，体验完整采集→训练→部署闭环。
+| 活动分类 (走/跑/静止) | 3   | P0  | ⭐⭐  | 数据好标，模型小，效果立竿见影 |
+| 手势控制 (翻腕/甩腕)  | 2   | P1  | ⭐⭐⭐ | 替代当前阈值抬手亮屏      |
+| 跌倒检测           | 2   | P1  | ⭐⭐  | 安全功能            |
+| 计步改进           | 回归  | P2  | ⭐⭐⭐ | 当前算法已可用         |
 
 ---
 
-## 8. 附录：工具链安装
+## 8. 最小 Demo：30 分钟跑通闭环
+
+如果不想碰 TFLite Micro 集成，可以用**决策树 C 数组导出**方案——零额外库依赖，零 arena 开销。
+
+### 方案：scikit-learn Random Forest → C 数组
+
+```python
+# 第1步：采集 3×30 秒数据（走、跑、静止）
+#   用手表串口输出 CSV，Python 脚本保存
+#   每条数据：ax,ay,az,gx,gy,gz,label
+
+# 第2步：训练
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.tree import export_text
+
+data = np.loadtxt("imu_data.csv", delimiter=",", skiprows=1)
+X, y = data[:, :6], data[:, 6]
+# 简单特征：每轴的均值和标准差（6轴 × 2特征 = 12维）
+X_feat = np.column_stack([
+    X.mean(axis=0),  # 6维
+    X.std(axis=0),   # 6维
+])
+
+model = RandomForestClassifier(n_estimators=10, max_depth=4)
+model.fit(X_feat, y)
+
+# 第3步：导出为 C 数组
+from sklearn.tree import DecisionTreeClassifier
+trees = [TreePrinter(tree.tree_) for tree in model.estimators_]
+# 输出 C 代码：每个决策树的节点阈值和左右分支
+```
+
+**固件端**（~50 行 C 代码，无任何外部库）：
+
+```cpp
+// 对每个决策树做推理，取多数投票
+static float mean[6], std[6];  // 每轴均值、标准差
+static int nb_classes = 3;
+
+int predict(float features[6]) {
+    // 计算均值和标准差 => 12维特征向量
+    int votes[3] = {0};
+    for (int t = 0; t < 10; t++) {       // 10棵树
+        int node = 0;
+        while (1) {
+            int feat = tree_nodes[t][node].feat;
+            float thr = tree_nodes[t][node].threshold;
+            if (features[feat] <= thr)
+                node = tree_nodes[t][node].left;
+            else
+                node = tree_nodes[t][node].right;
+            if (tree_nodes[t][node].leaf) {
+                votes[tree_nodes[t][node].cls]++;
+                break;
+            }
+        }
+    }
+    // 返回得票最多的类别
+    int best = 0;
+    for (int c = 1; c < nb_classes; c++)
+        if (votes[c] > votes[best]) best = c;
+    return best;
+}
+```
+
+**优势**：
+- 不需要 TensorFlow / TFLite Micro / ESP-NN
+- 不需要 PSRAM，RAM 开销 < 2KB
+- 训练在 PC 上 10 秒完成
+- 部署只需复制 C 数组 + 50 行推理代码
+
+**局限**：
+- 特征手动设计（均值+标准差），可能不如 CNN 自动特征提取准
+- 但 3 类活动识别 + 1 秒窗口，足够达到 90%+ 准确率
+
+---
+
+## 9. 附录：工具链安装
+
+### TFLite 路线
 
 ```bash
-# 需要补充的 Python 包
-pip install tensorflow
-pip install onnx onnxruntime
-pip install onnx-tf
+# onnx2tf 路线
+pip install onnx onnxruntime onnx2tf
+
+# ai_edge_torch 路线（推荐）
+pip install ai-edge-torch
+
+# 数据采集
+pip install pyserial
+```
+
+### 最小 Demo 路线（无需额外安装）
+
+```bash
+# PyTorch + scikit-learn 已安装，只需 pyserial
 pip install pyserial
 ```
 
@@ -467,5 +418,4 @@ pip install pyserial
 | -------------------------- | ---------------------------------------------------------------- | ------------------------ |
 | TFLiteMicro_ArduinoESP32S3 | https://github.com/j-siderius/TFLiteMicro_ArduinoESP32S3         | TFLite Micro + ESP-NN 集成 |
 | esp32pico_watch            | https://github.com/dht3218/esp32pico_watch                       | MFCC+CNN 端侧部署            |
-| xiaozhi-esp32              | https://github.com/dotnfc/xiaozhi-esp32/tree/wristgem            | AI 语音架构参考                |
 | TensorFlow HAR 教程          | https://www.tensorflow.org/tutorials/structured_data/time_series | 时序分类入门                   |
