@@ -15,6 +15,7 @@
 #include "service/ble_srv.h"
 #include "stopwatch.h"
 #include "weather.h"
+#include "activity.h"
 #include <math.h>
 #include <esp_sleep.h>
 
@@ -43,8 +44,8 @@ IMUdata acc, gyr;
 static int last_batt = -1;
 static char time_str[12], date_str[32];
 static int current_page = 0;
-static const int NUM_PAGES = 6;
-static lv_obj_t *pages[6];
+static const int NUM_PAGES = 7;
+static lv_obj_t *pages[7];
 
 // Step counter with improved algorithm
 static int step_count = 0;
@@ -99,7 +100,7 @@ void set_rtc_from_tm(struct tm *ti) {
 
 static void set_dot(int active) {
   if (!page_dots) return;
-  char dots[] = "○ ○ ○ ○ ○ ○";
+  char dots[] = "○ ○ ○ ○ ○ ○ ○";
   dots[active * 2] = '●';
   lv_label_set_text(page_dots, dots);
 }
@@ -161,7 +162,7 @@ static void status_bar_create(lv_obj_t *parent) {
   lv_label_set_text(battery_label, "--");
 
   page_dots = lv_label_create(parent);
-  lv_label_set_text(page_dots, "● ○ ○ ○ ○ ○");
+  lv_label_set_text(page_dots, "● ○ ○ ○ ○ ○ ○");
   lv_obj_align(page_dots, LV_ALIGN_TOP_MID, 0, 4);
   lv_obj_set_style_text_font(page_dots, &lv_font_montserrat_10, 0);
   lv_obj_set_style_text_color(page_dots, lv_color_hex(0x555566), 0);
@@ -313,6 +314,7 @@ static void init_pages(void) {
   pages[3] = lv_obj_create(NULL); notif_page_create(pages[3]);
   pages[4] = lv_obj_create(NULL); stopwatch_create(pages[4]);
   pages[5] = lv_obj_create(NULL); weather_create(pages[5]);
+  pages[6] = lv_obj_create(NULL); activity_create(pages[6]);
   status_bar_create(lv_layer_top());
   lv_scr_load(pages[0]);
 }
@@ -638,6 +640,7 @@ void loop() {
   if (imu.getDataReady()) {
     imu.getAccelerometer(acc.x, acc.y, acc.z);
     imu.getGyroscope(gyr.x, gyr.y, gyr.z);
+    activity_push_data(acc.x, acc.y, acc.z, gyr.x, gyr.y, gyr.z);
     update_step_count();
     update_wrist_detect();
   }
@@ -650,6 +653,7 @@ void loop() {
     if (current_page == 2) update_sensor_page();
     if (current_page == 3) update_notif_page();
     if (current_page == 5) weather_update();
+    if (current_page == 6) activity_update();
   }
 
   // Stopwatch needs sub-second precision
