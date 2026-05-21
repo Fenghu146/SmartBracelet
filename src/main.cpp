@@ -13,6 +13,8 @@
 #include "XPowersLib.h"
 #include "service/wifi_ntp.h"
 #include "service/ble_srv.h"
+#include "stopwatch.h"
+#include "weather.h"
 #include <math.h>
 #include <esp_sleep.h>
 
@@ -41,8 +43,8 @@ IMUdata acc, gyr;
 static int last_batt = -1;
 static char time_str[12], date_str[32];
 static int current_page = 0;
-static const int NUM_PAGES = 4;
-static lv_obj_t *pages[4];
+static const int NUM_PAGES = 6;
+static lv_obj_t *pages[6];
 
 // Step counter with improved algorithm
 static int step_count = 0;
@@ -97,7 +99,7 @@ void set_rtc_from_tm(struct tm *ti) {
 
 static void set_dot(int active) {
   if (!page_dots) return;
-  char dots[] = "○ ○ ○ ○";
+  char dots[] = "○ ○ ○ ○ ○ ○";
   dots[active * 2] = '●';
   lv_label_set_text(page_dots, dots);
 }
@@ -159,7 +161,7 @@ static void status_bar_create(lv_obj_t *parent) {
   lv_label_set_text(battery_label, "--");
 
   page_dots = lv_label_create(parent);
-  lv_label_set_text(page_dots, "● ○ ○ ○");
+  lv_label_set_text(page_dots, "● ○ ○ ○ ○ ○");
   lv_obj_align(page_dots, LV_ALIGN_TOP_MID, 0, 4);
   lv_obj_set_style_text_font(page_dots, &lv_font_montserrat_10, 0);
   lv_obj_set_style_text_color(page_dots, lv_color_hex(0x555566), 0);
@@ -309,6 +311,8 @@ static void init_pages(void) {
   pages[1] = lv_obj_create(NULL); analog_watchface_create(pages[1]);
   pages[2] = lv_obj_create(NULL); sensor_page_create(pages[2]);
   pages[3] = lv_obj_create(NULL); notif_page_create(pages[3]);
+  pages[4] = lv_obj_create(NULL); stopwatch_create(pages[4]);
+  pages[5] = lv_obj_create(NULL); weather_create(pages[5]);
   status_bar_create(lv_layer_top());
   lv_scr_load(pages[0]);
 }
@@ -645,7 +649,11 @@ void loop() {
     if (current_page == 1) update_analog_watchface();
     if (current_page == 2) update_sensor_page();
     if (current_page == 3) update_notif_page();
+    if (current_page == 5) weather_update();
   }
+
+  // Stopwatch needs sub-second precision
+  if (current_page == 4) stopwatch_update();
 
   // Screen timeout
   if (screen_on && millis() - last_activity_time > DISPLAY_TIMEOUT_MS) {
