@@ -73,7 +73,14 @@
       "Bash(python __TRACKED_VAR__/.platformio/packages/tool-esptoolpy/esptool.py --chip esp32s3 --port COM9 --baud 115200 write_flash -z --flash_mode qio --flash_freq 80m --flash_size 16MB 0x0 .pio/build/esp32s3/bootloader.bin 0x8000 .pio/build/esp32s3/partitions.bin 0x10000 .pio/build/esp32s3/firmware.bin)",
       "Bash(python -c \"import serial.tools.list_ports; [print\\(p\\) for p in serial.tools.list_ports.comports\\(\\)]\")",
       "Bash(python -c \"import serial; serial.Serial\\('COM9', 115200, timeout=0.5\\).close\\(\\)\")",
-      "Bash(break)"
+      "Bash(break)",
+      "Bash(rtk wc *)",
+      "Bash(python3 -c ' *)",
+      "Bash(C:/Users/35015/.platformio/packages/toolchain-xtensa-esp32s3/bin/xtensa-esp32s3-elf-size.exe -A .pio/build/esp32s3/firmware.elf)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('train_rf.py'\\).read\\(\\)\\); print\\('Syntax OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('collect_data.py'\\).read\\(\\)\\); print\\('Syntax OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('train_rf.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('collect_data.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")"
     ]
   }
 }
