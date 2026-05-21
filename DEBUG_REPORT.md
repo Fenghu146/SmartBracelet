@@ -869,3 +869,60 @@ acc → 低通滤波 (α=0.02, ~0.5s) → gravity vector
 3. 触摸唤醒需要 CST816D 在 deep sleep 期间保持 INT 引脚有效（芯片处于 Active 模式）
 4. PMU 睡前关闭 DC1/ALDO1，唤醒后 setup 中重新使能
 5. 电池保护板触发后，AXP2101 无法充电，需物理断开电池排线重试或换电池
+
+---
+
+## Session 10: 边缘 AI 训练管道搭建 (2026-05-21)
+
+**目标**：建立完整的边缘 AI 训练工作流，从数据采集到 TFLite 模型部署的 Python 工具链。
+
+### 做了什么
+
+1. **方案输出**：撰写 `EDGE_AI_TRAINING_PLAN.md`，涵盖 8 章节（硬件能力→数据采集→模型训练→TFLite 导出→设备端推理集成→路线图）
+
+2. **训练脚本**：创建 `training/` 目录，包含 6 个 Python 脚本：
+
+   | 脚本 | 功能 |
+   |------|------|
+   | `collect_data.py` | USB 串口实时采集 IMU 数据 + 键盘按键实时标注 → CSV |
+   | `dataset.py` | 滑动窗口 (1-2s)、数据增强 (噪声/缩放/旋转)、train/val/test 分割 |
+   | `model.py` | TinyHAR (1D-CNN, ~10K params) + TinyTCN (扩张卷积, ~8.5K params) |
+   | `train.py` | PyTorch 训练循环 → 保存 .pt 检查点 + .onnx 模型 |
+   | `convert.py` | PyTorch checkpoint → Keras 权重复制 → TFLite (FP32/INT8) → C 头文件 |
+   | `requirements.txt` | 依赖清单 |
+
+3. **环境验证**：检查 py312 conda 环境，已安装 `torch 2.11+cu130`、`tensorflow 2.21`、`scikit-learn`、`pandas`、`pyserial` 等全部依赖。仅补装 `onnx-tf`（后因兼容问题弃用，改为 PyTorch→Keras 直接权重复制）。
+
+4. **端到端验证**：合成测试数据 → 训练 → 导出全链路跑通：
+
+   | 步骤 | 结果 |
+   |------|------|
+   | PyTorch 前向 | TinyHAR 9907 params, TinyTCN 8499 params |
+   | Keras 权重复制 | max diff 0.000077 |
+   | TFLite FP32 导出 | 44.7 KB |
+   | TFLite INT8 导出 | 19.9 KB (-55%) |
+   | C 头文件生成 | ✅ |
+
+### 关键决策
+
+| 决策 | 方案 | 原因 |
+|------|------|------|
+| PyTorch→TFLite 路径 | 训练用 PyTorch → 权重复制到 Keras → TFLite | 避开了 onnx-tf 的兼容性问题；无需多装一个工具 |
+| 模型量化 | INT8 (全整数量化) | INT8 推理速度 ~4x FP32，模型缩小 ~55% |
+| 第一迭代任务 | 4 类活动识别 (走/跑/坐/静止) | 数据好标、模型小、效果立竿见影 |
+
+### 资源
+
+| 指标 | 数值 |
+|------|------|
+| RAM | 148KB / 320KB (46%) |
+| Flash | 1.6MB / 3.3MB (49%) |
+| 训练环境 | PyTorch 2.11 CUDA + TensorFlow 2.21 + scikit-learn (全部就绪) |
+
+### 注意事项
+
+1. Windows OMP 冲突：首次运行会报 `libiomp5md.dll` 冲突，脚本顶部已加 `os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'`
+2. 采集数据时需手表通过 USB 连接电脑（COM9），波特率 115200
+3. INT8 量化需要校准数据，无数据时默认用随机数据，建议实际采集后用真实校准
+4. Tensor Arena (~100KB) 建议放 PSRAM，需在 platformio.ini 中配置 `board_build.psram=enable`
+5. 当前固件已有秒表 + 天气页面增量（6 页），非本次变更
