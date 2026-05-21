@@ -12,17 +12,18 @@
 | RTC | PCF85063 (I2C 0x51) |
 | 连接 | USB CDC (COM9), VID:PID=303A:1001 |
 
-## 当前状态 (2026-05-20)
+## 当前状态 (2026-05-21)
 
 - ✅ 显示: Arduino_GFX + LVGL 8.4.0, 偏移 (0,20), RGB565 SWAP=0
 - ✅ 触控: CST816S 兼容驱动, IIC 15/14, 手势左/右滑动翻页
 - ✅ RTC: PCF85063 时间读写
 - ✅ IMU: QMI8658 加速度+陀螺仪, 计步算法
 - ✅ PMU: AXP2101 电量读取, 电源轨配置
-- ✅ UI: 数字表盘 + 模拟表盘 + 传感器页, 3页滑动导航
+- ✅ UI: 数字表盘 + 模拟表盘 + 传感器页 + 通知页, 4页滑动导航
 - ✅ WiFi NTP: 自动连接 + NTP 校时
-- ✅ BLE: 通知推送 (nRF Connect -> 手表)
-- ❌ Deep sleep 低功耗
+- ✅ BLE: 通知推送 (nRF Connect -> 手表), 双向通讯
+- ✅ 抬手亮屏: IMU 抬腕检测 + 背光自动管理 + 息屏定时 (10s)
+- ✅ Deep sleep: AXP2101 低功耗 + 触摸/定时唤醒 (30s 超时)
 - ❌ 手机 App
 
 ## 关键配置
@@ -46,10 +47,12 @@
 
 ## 调试报告
 
-详细的故障排查记录在 `DEBUG_REPORT.md`，包含 6 次调试：
+详细的故障排查记录在 `DEBUG_REPORT.md`，包含 8 次调试：
 - 白屏/启动循环修复
 - USB 插拔后 flash 损坏恢复
 - LVGL 集成
 - LVGL 验证 + 触摸引脚修正
 - Boot Loop 修复（Arduino_DriveBus 回退）
 - 传感器集成 + 表盘 UI
+- BLE 双向通信 + 中文支持
+- 抬手亮屏 + 通知页面 + Deep sleep

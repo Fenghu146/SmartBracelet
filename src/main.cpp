@@ -14,6 +14,7 @@
 #include "service/wifi_ntp.h"
 #include "service/ble_srv.h"
 #include <math.h>
+#include <esp_sleep.h>
 
 Arduino_DataBus *bus = nullptr;
 Arduino_GFX *gfx = nullptr;
@@ -37,8 +38,8 @@ IMUdata acc, gyr;
 static int last_batt = -1;
 static char time_str[12], date_str[32];
 static int current_page = 0;
-static const int NUM_PAGES = 3;
-static lv_obj_t *pages[3];
+static const int NUM_PAGES = 4;
+static lv_obj_t *pages[4];
 
 // Step counter with improved algorithm
 static int step_count = 0;
@@ -67,6 +68,22 @@ static lv_obj_t *dial_marks[12];
 static unsigned long last_ntp_attempt = 0;
 static bool ntp_synced = false;
 
+// Screen timeout & wrist raise
+static unsigned long last_activity_time = 0;
+static bool screen_on = true;
+static const unsigned long DISPLAY_TIMEOUT_MS = 10000;
+static const unsigned long DEEP_SLEEP_TIMEOUT_MS = 30000;
+
+static float grav_x = 0, grav_y = 0, grav_z = 0;
+static float prev_grav_x = 0, prev_grav_y = 0, prev_grav_z = 0;
+static unsigned long wrist_raise_time = 0;
+static bool wrist_is_raised = false;
+
+// Notification page state
+static lv_obj_t *notif_title = nullptr;
+static lv_obj_t *notif_body = nullptr;
+static lv_obj_t *notif_app = nullptr;
+
 void set_rtc_from_tm(struct tm *ti) {
   rtc.setDateTime(ti->tm_year + 1900, ti->tm_mon + 1, ti->tm_mday,
     ti->tm_hour, ti->tm_min, ti->tm_sec);
@@ -75,7 +92,7 @@ void set_rtc_from_tm(struct tm *ti) {
 
 static void set_dot(int active) {
   if (!page_dots) return;
-  char dots[] = "○ ○ ○";
+  char dots[] = "○ ○ ○ ○";
   dots[active * 2] = '●';
   lv_label_set_text(page_dots, dots);
 }
@@ -100,7 +117,7 @@ static void status_bar_create(lv_obj_t *parent) {
   lv_label_set_text(battery_label, "BAT --");
 
   page_dots = lv_label_create(parent);
-  lv_label_set_text(page_dots, "● ○ ○");
+  lv_label_set_text(page_dots, "● ○ ○ ○");
   lv_obj_align(page_dots, LV_ALIGN_TOP_MID, 0, 4);
   lv_obj_set_style_text_font(page_dots, &lv_font_montserrat_10, 0);
   lv_obj_set_style_text_color(page_dots, lv_color_hex(0x555566), 0);
@@ -207,10 +224,43 @@ static void update_analog_watchface(void) {
   update_analog_hand(sec_hand, sec_pts, s * 6, 80);
 }
 
+static void notif_page_create(lv_obj_t *parent) {
+  lv_obj_set_style_bg_color(parent, lv_color_hex(0x0d0d1a), 0);
+
+  notif_app = lv_label_create(parent);
+  lv_label_set_text(notif_app, "No notifications");
+  lv_obj_set_style_text_font(notif_app, &lv_font_montserrat_10, 0);
+  lv_obj_set_style_text_color(notif_app, lv_color_hex(0x555566), 0);
+  lv_obj_align(notif_app, LV_ALIGN_TOP_LEFT, 8, 10);
+
+  notif_title = lv_label_create(parent);
+  lv_label_set_text(notif_title, "");
+  lv_obj_set_style_text_font(notif_title, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_color(notif_title, lv_color_hex(0xffffff), 0);
+  lv_obj_align(notif_title, LV_ALIGN_TOP_LEFT, 8, 28);
+
+  notif_body = lv_label_create(parent);
+  lv_label_set_text(notif_body, "");
+  lv_obj_set_style_text_font(notif_body, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_color(notif_body, lv_color_hex(0xcccccc), 0);
+  lv_obj_align(notif_body, LV_ALIGN_TOP_LEFT, 8, 50);
+  lv_label_set_long_mode(notif_body, LV_LABEL_LONG_WRAP);
+  lv_obj_set_width(notif_body, LCD_WIDTH - 16);
+}
+
+static void update_notif_page(void) {
+  if (strlen(ble_notification.app_id) > 0) {
+    lv_label_set_text(notif_app, ble_notification.app_id);
+    lv_label_set_text(notif_title, ble_notification.title);
+    lv_label_set_text(notif_body, ble_notification.body);
+  }
+}
+
 static void init_pages(void) {
   pages[0] = lv_obj_create(NULL); watchface_create(pages[0]);
   pages[1] = lv_obj_create(NULL); analog_watchface_create(pages[1]);
   pages[2] = lv_obj_create(NULL); sensor_page_create(pages[2]);
+  pages[3] = lv_obj_create(NULL); notif_page_create(pages[3]);
   lv_scr_load(pages[0]);
 }
 
@@ -299,9 +349,44 @@ static void update_step_count(void) {
   }
 }
 
+static void set_backlight(bool on) {
+  digitalWrite(LCD_BL, on ? HIGH : LOW);
+  screen_on = on;
+}
+
+static void reset_activity_timer(void) {
+  last_activity_time = millis();
+  if (!screen_on) set_backlight(true);
+}
+
+static void update_wrist_detect(void) {
+  grav_x = 0.95f * grav_x + 0.05f * acc.x;
+  grav_y = 0.95f * grav_y + 0.05f * acc.y;
+  grav_z = 0.95f * grav_z + 0.05f * acc.z;
+
+  float dx = grav_x - prev_grav_x;
+  float dy = grav_y - prev_grav_y;
+  float dz = grav_z - prev_grav_z;
+  float change = sqrtf(dx*dx + dy*dy + dz*dz);
+
+  prev_grav_x = grav_x; prev_grav_y = grav_y; prev_grav_z = grav_z;
+
+  // Sudden gravity shift = wrist raise motion
+  if (change > 0.35f && !wrist_is_raised) {
+    wrist_is_raised = true;
+    wrist_raise_time = millis();
+    reset_activity_timer();
+  }
+
+  if (wrist_is_raised && millis() - wrist_raise_time > 2000) {
+    wrist_is_raised = false;
+  }
+}
+
 void setup() {
   pinMode(LCD_BL, OUTPUT);
   digitalWrite(LCD_BL, HIGH);
+  last_activity_time = millis();
 
   USBSerial.begin(115200);
   unsigned long start = millis();
@@ -393,6 +478,7 @@ void loop() {
     imu.getAccelerometer(acc.x, acc.y, acc.z);
     imu.getGyroscope(gyr.x, gyr.y, gyr.z);
     update_step_count();
+    update_wrist_detect();
   }
 
   static unsigned long last_tick = 0;
@@ -401,10 +487,33 @@ void loop() {
     update_watchface();
     if (current_page == 1) update_analog_watchface();
     if (current_page == 2) update_sensor_page();
+    if (current_page == 3) update_notif_page();
+  }
+
+  // Screen timeout
+  if (screen_on && millis() - last_activity_time > DISPLAY_TIMEOUT_MS) {
+    set_backlight(false);
+  }
+
+  // Deep sleep timeout
+  if (!screen_on && millis() - last_activity_time > DEEP_SLEEP_TIMEOUT_MS) {
+    USBSerial.println("Entering deep sleep...");
+    delay(100);
+    // Configure PMU for low power before sleep
+    pmu.disableDC1();
+    pmu.disableALDO1();
+    pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
+    // Wake every 60s (for periodic RTC check) or on touch
+    esp_sleep_enable_timer_wakeup(60000000);
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)TP_INT, 0);
+    esp_deep_sleep_start();
   }
 
   if (touch && touch->available()) {
-    if (touch->data.x > 0 || touch->data.y > 0) handle_gesture();
+    if (touch->data.x > 0 || touch->data.y > 0) {
+      reset_activity_timer();
+      handle_gesture();
+    }
   }
 
   delay(5);
