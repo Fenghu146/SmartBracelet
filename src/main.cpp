@@ -309,7 +309,18 @@ static void init_pages(void) {
   pages[1] = lv_obj_create(NULL); analog_watchface_create(pages[1]);
   pages[2] = lv_obj_create(NULL); sensor_page_create(pages[2]);
   pages[3] = lv_obj_create(NULL); notif_page_create(pages[3]);
+  status_bar_create(lv_layer_top());
   lv_scr_load(pages[0]);
+}
+
+static uint16_t read_batt_voltage_raw(void) {
+  int h5 = pmu.readRegister(0x34);
+  int l8 = pmu.readRegister(0x35);
+  if (h5 < 0 || l8 < 0) return 0;
+  return ((h5 & 0x1F) << 8) | l8;
+}
+static int read_batt_percent_raw(void) {
+  return pmu.readRegister(0xA4);
 }
 
 static void update_sensor_page(void) {
@@ -318,7 +329,7 @@ static void update_sensor_page(void) {
   lv_label_set_text_fmt(gyro_label, "GYR %+04d %+04d %+04d",
     (int)(gyr.x * 10), (int)(gyr.y * 10), (int)(gyr.z * 10));
   lv_label_set_text_fmt(batt_volt_label, "BAT %dmV %d%%",
-    pmu.getBattVoltage(), pmu.getBatteryPercent());
+    read_batt_voltage_raw(), read_batt_percent_raw());
 }
 
 static void switch_page(int dir) {
@@ -343,8 +354,8 @@ static void update_watchface(void) {
     mo[dt.month >= 1 && dt.month <= 12 ? dt.month - 1 : 0], dt.day);
   lv_label_set_text(date_label, date_str);
 
-  int batt = pmu.getBatteryPercent();
-  if (batt >= 0 && batt != last_batt) {
+  int batt = read_batt_percent_raw();
+  if (batt >= 0 && batt <= 100 && batt != last_batt) {
     last_batt = batt;
     lv_label_set_text_fmt(battery_label, "%d%%", batt);
     lv_obj_set_style_text_color(battery_label,
@@ -498,6 +509,18 @@ void setup() {
   gfx = new Arduino_ST7789(bus, LCD_RST, 0, true, LCD_WIDTH, LCD_HEIGHT, 0, 20, 0, 0);
   if (!gfx->begin()) { while (true) delay(100); }
 
+  // Clear physical rows 0-19 (outside LVGL space due to _yStart=20)
+  // and rows 304-319 at the bottom, since ST7789 is 320 rows tall.
+  bus->beginWrite();
+  bus->writeC8D16D16(ST7789_CASET, 0, 239);
+  bus->writeC8D16D16(ST7789_RASET, 0, 19);
+  bus->writeCommand(ST7789_RAMWR);
+  bus->writeRepeat(0x0000, 240 * 20);
+  bus->writeC8D16D16(ST7789_RASET, 304, 319);
+  bus->writeCommand(ST7789_RAMWR);
+  bus->writeRepeat(0x0000, 240 * 16);
+  bus->endWrite();
+
   lv_init();
   lv_port_disp_init();
   init_pages();
@@ -529,8 +552,43 @@ void setup() {
     pmu.setALDO1Voltage(3300); pmu.enableALDO1();
     pmu.enableVbusVoltageMeasure(); pmu.enableBattVoltageMeasure();
     pmu.enableSystemVoltageMeasure();
+    pmu.enableBattDetection();
+    pmu.enableGauge();
+    pmu.fuelGaugeControl(false, true);
+    // Charging config: 4.35V target, 500mA constant current
+    pmu.setChargeTargetVoltage(XPOWERS_AXP2101_CHG_VOL_4V35);
+    pmu.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_500MA);
+    pmu.setPrechargeCurr(XPOWERS_AXP2101_PRECHARGE_200MA);
     pmu.disableTSPinMeasure();
     pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ); pmu.clearIrqStatus();
+    // Force BATFET ON + try CHG_EN bit
+    pmu.writeRegister(0x12, 0x01);    // enable BATFET over-temp detect
+    int icc = pmu.readRegister(0x62);
+    pmu.writeRegister(0x62, icc | 0x80); // try setting bit 7 (CHG_EN)
+    delay(200);
+    int raw_status1 = pmu.readRegister(0x00);
+    int raw_adc_ctrl = pmu.readRegister(0x30);
+    int raw_batdet_ctrl = pmu.readRegister(0x68);
+    int raw_batfet = pmu.readRegister(0x12);
+    // Read raw ADC registers for battery voltage (0x34 high 5bits, 0x35 low 8bits)
+    int raw_adc_h = pmu.readRegister(0x34);
+    int raw_adc_l = pmu.readRegister(0x35);
+    int raw_percent = pmu.readRegister(0xA4);
+    // Also read VBUS and system voltage registers for comparison
+    int raw_vbus_h = pmu.readRegister(0x38);
+    int raw_vbus_l = pmu.readRegister(0x39);
+    int raw_sys_h = pmu.readRegister(0x36);
+    int raw_sys_l = pmu.readRegister(0x37);
+    uint16_t raw_batt_mv = ((raw_adc_h & 0x1F) << 8) | raw_adc_l;
+    uint16_t raw_vbus = ((raw_vbus_h & 0x3F) << 8) | raw_vbus_l;
+    uint16_t raw_sys = ((raw_sys_h & 0x1F) << 8) | raw_sys_l;
+    USBSerial.printf("PMU: STATUS1=0x%02x ADC_CTRL=0x%02x BATFET=0x%02x DET_CTRL=0x%02x\n",
+      raw_status1, raw_adc_ctrl, raw_batfet, raw_batdet_ctrl);
+    USBSerial.printf("PMU: batt_adc=%dmV vbus_adc=%dmV sys_adc=%dmV raw_percent=%d\n",
+      raw_batt_mv, raw_vbus, raw_sys, raw_percent);
+    USBSerial.printf("PMU: connected=%d vbus_in=%d vbus_good=%d chg=%d\n",
+      pmu.isBatteryConnect(), pmu.isVbusIn(), pmu.isVbusGood(),
+      pmu.getChargerStatus());
   }
 
   ble_srv_init();
@@ -596,16 +654,21 @@ void loop() {
 
   // Deep sleep timeout
   if (!screen_on && millis() - last_activity_time > DEEP_SLEEP_TIMEOUT_MS) {
-    USBSerial.println("Entering deep sleep...");
-    delay(100);
-    // Configure PMU for low power before sleep
-    pmu.disableDC1();
-    pmu.disableALDO1();
-    pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
-    // Wake every 60s (for periodic RTC check) or on touch
-    esp_sleep_enable_timer_wakeup(60000000);
-    esp_sleep_enable_ext0_wakeup((gpio_num_t)TP_INT, 0);
-    esp_deep_sleep_start();
+    // Don't deep sleep when USB is plugged in (charging needs serial alive)
+    if (pmu.isVbusIn()) {
+      last_activity_time = millis(); // keep resetting, never sleep while on USB
+    } else {
+      USBSerial.println("Entering deep sleep...");
+      delay(100);
+      // Configure PMU for low power before sleep
+      pmu.disableDC1();
+      pmu.disableALDO1();
+      pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
+      // Wake every 60s (for periodic RTC check) or on touch
+      esp_sleep_enable_timer_wakeup(60000000);
+      esp_sleep_enable_ext0_wakeup((gpio_num_t)TP_INT, 0);
+      esp_deep_sleep_start();
+    }
   }
 
   if (touch && touch->available()) {
