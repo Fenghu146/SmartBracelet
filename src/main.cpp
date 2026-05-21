@@ -27,9 +27,12 @@ XPowersPMU pmu;
 static lv_obj_t *time_label = nullptr;
 static lv_obj_t *date_label = nullptr;
 static lv_obj_t *battery_label = nullptr;
+static lv_obj_t *battery_bar = nullptr;
+static lv_obj_t *charging_label = nullptr;
 static lv_obj_t *step_label = nullptr;
 static lv_obj_t *accel_label = nullptr;
 static lv_obj_t *gyro_label = nullptr;
+static lv_obj_t *batt_volt_label = nullptr;
 static lv_obj_t *wifi_icon = nullptr;
 static lv_obj_t *ble_icon = nullptr;
 static lv_obj_t *page_dots = nullptr;
@@ -112,11 +115,48 @@ static void status_bar_create(lv_obj_t *parent) {
   lv_obj_set_style_text_font(ble_icon, &lv_font_montserrat_10, 0);
   lv_obj_set_style_text_color(ble_icon, lv_color_hex(0x555566), 0);
 
+  // Battery icon bar (right side)
+  battery_bar = lv_obj_create(parent);
+  lv_obj_remove_style_all(battery_bar);
+  lv_obj_set_size(battery_bar, 24, 10);
+  lv_obj_set_style_border_width(battery_bar, 1, 0);
+  lv_obj_set_style_border_color(battery_bar, lv_color_hex(0x888899), 0);
+  lv_obj_set_style_radius(battery_bar, 1, 0);
+  lv_obj_set_style_pad_all(battery_bar, 1, 0);
+  lv_obj_set_style_bg_color(battery_bar, lv_color_hex(0x111122), 0);
+  lv_obj_set_style_bg_opa(battery_bar, LV_OPA_COVER, 0);
+  lv_obj_align(battery_bar, LV_ALIGN_TOP_RIGHT, -28, 7);
+
+  // Battery terminal (tiny rectangle on the right)
+  lv_obj_t *bt = lv_obj_create(battery_bar);
+  lv_obj_remove_style_all(bt);
+  lv_obj_set_size(bt, 2, 4);
+  lv_obj_set_style_bg_color(bt, lv_color_hex(0x888899), 0);
+  lv_obj_set_style_bg_opa(bt, LV_OPA_COVER, 0);
+  lv_obj_align(bt, LV_ALIGN_RIGHT_MID, 2, 0);
+  lv_obj_set_style_radius(bt, 0, 0);
+
+  // Battery fill bar (inside the battery icon)
+  lv_obj_t *bf = lv_obj_create(battery_bar);
+  lv_obj_remove_style_all(bf);
+  lv_obj_set_size(bf, 20, 6);
+  lv_obj_set_style_bg_color(bf, lv_color_hex(0x00d4ff), 0);
+  lv_obj_set_style_bg_opa(bf, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(bf, 0, 0);
+  lv_obj_align(bf, LV_ALIGN_LEFT_MID, 1, 0);
+  battery_bar = bf;
+
+  charging_label = lv_label_create(parent);
+  lv_label_set_text(charging_label, "");
+  lv_obj_align(charging_label, LV_ALIGN_TOP_RIGHT, -56, 5);
+  lv_obj_set_style_text_font(charging_label, &lv_font_montserrat_10, 0);
+  lv_obj_set_style_text_color(charging_label, lv_color_hex(0x00d488), 0);
+
   battery_label = lv_label_create(parent);
   lv_obj_align(battery_label, LV_ALIGN_TOP_RIGHT, -8, 6);
   lv_obj_set_style_text_font(battery_label, &lv_font_montserrat_12, 0);
   lv_obj_set_style_text_color(battery_label, lv_color_hex(0x888899), 0);
-  lv_label_set_text(battery_label, "BAT --");
+  lv_label_set_text(battery_label, "--");
 
   page_dots = lv_label_create(parent);
   lv_label_set_text(page_dots, "● ○ ○ ○");
@@ -168,6 +208,12 @@ static void sensor_page_create(lv_obj_t *parent) {
   lv_obj_set_style_text_font(gyro_label, &lv_font_montserrat_12, 0);
   lv_obj_set_style_text_color(gyro_label, lv_color_hex(0xcccccc), 0);
   lv_obj_align(gyro_label, LV_ALIGN_LEFT_MID, 10, 10);
+
+  batt_volt_label = lv_label_create(parent);
+  lv_label_set_text(batt_volt_label, "BAT: --");
+  lv_obj_set_style_text_font(batt_volt_label, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_color(batt_volt_label, lv_color_hex(0x00d488), 0);
+  lv_obj_align(batt_volt_label, LV_ALIGN_LEFT_MID, 10, 40);
 }
 
 static void analog_create_hand(lv_obj_t **hand, lv_point_t pts[2],
@@ -271,6 +317,8 @@ static void update_sensor_page(void) {
     (int)(acc.x * 100), (int)(acc.y * 100), (int)(acc.z * 100));
   lv_label_set_text_fmt(gyro_label, "GYR %+04d %+04d %+04d",
     (int)(gyr.x * 10), (int)(gyr.y * 10), (int)(gyr.z * 10));
+  lv_label_set_text_fmt(batt_volt_label, "BAT %dmV %d%%",
+    pmu.getBattVoltage(), pmu.getBatteryPercent());
 }
 
 static void switch_page(int dir) {
@@ -298,10 +346,27 @@ static void update_watchface(void) {
   int batt = pmu.getBatteryPercent();
   if (batt >= 0 && batt != last_batt) {
     last_batt = batt;
-    lv_label_set_text_fmt(battery_label, "BAT %d%%", batt);
+    lv_label_set_text_fmt(battery_label, "%d%%", batt);
     lv_obj_set_style_text_color(battery_label,
       batt < 20 ? lv_color_hex(0xff3333) : lv_color_hex(0x888899), 0);
+    // Update battery bar width (max 20px)
+    int bw = (batt * 20) / 100;
+    if (bw < 2 && batt > 0) bw = 2;
+    lv_obj_set_width(battery_bar, bw);
+    lv_obj_set_style_bg_color(battery_bar,
+      batt < 20 ? lv_color_hex(0xff3333) :
+      batt < 50 ? lv_color_hex(0xffaa00) : lv_color_hex(0x00d4ff), 0);
     ble_srv_update_battery(batt);
+  }
+
+  if (charging_label) {
+    xpowers_chg_status_t cs = pmu.getChargerStatus();
+    bool chg = (cs == XPOWERS_AXP2101_CHG_CC_STATE ||
+                cs == XPOWERS_AXP2101_CHG_PRE_STATE ||
+                cs == XPOWERS_AXP2101_CHG_TRI_STATE);
+    lv_label_set_text(charging_label, chg ? "+" : "");
+    lv_obj_set_style_text_color(charging_label,
+      chg ? lv_color_hex(0x00d488) : lv_color_hex(0x111122), 0);
   }
 
   lv_label_set_text_fmt(step_label, "Steps: %d", step_count);
