@@ -1,7 +1,7 @@
 #include "weather.h"
 #include "service/wifi_ntp.h"
 #include <Arduino.h>
-#include <WiFiClientSecure.h>
+#include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <lvgl.h>
@@ -42,13 +42,12 @@ void weather_fetch(void) {
     return;
   }
 
-  WiFiClientSecure client;
-  client.setInsecure();
+  WiFiClient client;
   HTTPClient http;
 
   char url[256];
   snprintf(url, sizeof(url),
-    "https://api.open-meteo.com/v1/forecast"
+    "http://api.open-meteo.com/v1/forecast"
     "?latitude=%s&longitude=%s"
     "&current=temperature_2m,relative_humidity_2m,weather_code",
     WEATHER_LAT, WEATHER_LON);

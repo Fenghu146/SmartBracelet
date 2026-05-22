@@ -548,6 +548,8 @@ void setup() {
 
   lv_init();
   lv_port_disp_init();
+  tf_init();
+  audio_init();
   init_pages();
 
   touch = new CST816S(TP_SDA, TP_SCL, TP_RST, TP_INT);
@@ -618,8 +620,6 @@ void setup() {
 
   ble_srv_init();
   wifi_ntp_init();
-  tf_init();
-  audio_init();
   USBSerial.println("Ready");
 }
 
