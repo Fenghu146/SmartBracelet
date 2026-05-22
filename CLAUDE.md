@@ -40,10 +40,11 @@
 ## 交接指令
 
 当我说"交接"时，你需要：
-1. 检查 git status，了解当前工作状态
-2. 更新 DEBUG_REPORT.md，追加最近的调试/开发记录
-3. 如果有代码改动且未提交，执行 git add + git commit
-4. 输出当前项目状态摘要（什么在做、什么卡住、下一步建议）
+1. 检查 `codegraph status`，确保索引是最新的（如果过期则 `codegraph sync`）
+2. 检查 git status，了解当前工作状态
+3. 更新 DEBUG_REPORT.md，追加最近的调试/开发记录
+4. 如果有代码改动且未提交，执行 git add + git commit
+5. 输出当前项目状态摘要（什么在做、什么卡住、下一步建议）
 
 ## 调试报告
 

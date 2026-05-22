@@ -955,3 +955,74 @@ acc → 低通滤波 (α=0.02, ~0.5s) → gravity vector
 3. INT8 量化需要校准数据，无数据时默认用随机数据，建议实际采集后用真实校准
 4. Tensor Arena (~100KB) 建议放 PSRAM，需在 platformio.ini 中配置 `board_build.psram=enable`
 5. 当前固件已有秒表 + 天气页面增量（6 页），非本次变更
+
+---
+
+## Session 11: CodeGraph 预索引代码知识图谱 + 音频驱动收尾 (2026-05-22)
+
+### 概述
+
+安装 CodeGraph（colbymchenry/codegraph）MCP 服务器，建立项目代码知识图谱。同时完成 ES8311 音频驱动的最终调试（PCA9557 I2C 扩展器 + PA_EN 控制）。
+
+### CodeGraph 安装
+
+| 步骤 | 说明 |
+|------|------|
+| `npm i -g @colbymchenry/codegraph` | 全局安装 CLI |
+| `codegraph init` | 在项目根目录初始化 |
+| `codegraph index` | 索引全部 288 个文件 |
+| `codegraph install --target claude` | 配置 MCP 服务器 |
+
+**索引统计**：
+
+| 指标 | 数值 |
+|------|------|
+| 文件 | 288 |
+| 节点 | 3,479 |
+| 边 | 4,727 |
+| DB 大小 | 7.11 MB |
+| 覆盖语言 | C++ (203), C (79), Python (6) |
+
+**MCP 工具集**：`codegraph_search`, `codegraph_context`, `codegraph_callers`, `codegraph_callees`, `codegraph_impact`, `codegraph_node`, `codegraph_explore`, `codegraph_files`, `codegraph_status`
+
+### 音频 ES8311 最终修复 (committed)
+
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| ES8311 不工作 | I2C 通信正常但无音频输出，PA_EN (GPIO21/DAC1) 不受 GPIO 控制 | PA_EN 实际由 PCA9557 I2C 扩展器 IO1 控制，添加 PCA9557 初始化代码 |
+| I2S 格式不匹配 | ES8311 配置为 24-bit I2S，但 ESP32 I2S 驱动输出 16-bit | SDP_IN 改为 0x08 (I2S, 16-bit)；cfg.bits_per_sample 改为 16 |
+| boot beep 测试 | `audio_play_sine` 函数缺失 | 添加 sine 波生成函数，boot 阶段播放短提示音 |
+
+### 文件变更
+
+| 文件 | 变更 |
+|------|------|
+| `src/service/audio.cpp` | + PCA9557 I2C 扩展器初始化，ES8311 寄存器修正 |
+| `include/pin_config.h` | PA_EN 注释（交由 PCA9557 控制），+ PCA9557_ADDR |
+| `src/pin_config.h` | 同上 |
+| `CLAUDE.md` | 交接指令添加 codegraph status 检查 |
+| `.codegraph/` | **新建** — CodeGraph 知识图谱索引目录 (7.2 MB) |
+| `.mcp.json` | **新建** — MCP 服务器配置 |
+| `.claude/settings.json` | **新建** — MCP 工具权限预批准 |
+| `.claude/CLAUDE.md` | **新建** — CodeGraph 使用指南 |
+
+### CodeGraph 使用说明
+
+**查询代码结构**（零文件读取）：
+```bash
+codegraph context "音频驱动 ES8311 初始化流程"
+codegraph query "LVGL"
+codegraph search "CST816S"
+```
+
+**MCP 工具查询**（Claude Code 内）：
+- `codegraph_context` — 任务上下文（首选）
+- `codegraph_callers` / `codegraph_callees` — 调用关系
+- `codegraph_impact` — 变更影响分析
+
+### 注意事项
+
+1. MCP 服务器配置文件为 `.mcp.json`，通过 stdio 启动 `codegraph serve --mcp`
+2. 索引通过文件监听器自动增量更新（~500ms 延迟）
+3. 首次进入新项目需运行 `codegraph install` 初始化
+4. 不同项目的 `.codegraph/` 相互独立，每个约 7MB
