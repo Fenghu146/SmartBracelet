@@ -20,19 +20,9 @@
 #define ES8311_ADC_CTL   0x0A
 #define ES8311_DAC_VOL   0x0B
 #define ES8311_ADC_VOL   0x0C
-#define ES8311_DAC_LMT1  0x0D
-#define ES8311_DAC_LMT2  0x0E
-#define ES8311_DAC_LMT3  0x0F
-#define ES8311_DAC_LMT4  0x10
-#define ES8311_ADC_LMT1  0x11
-#define ES8311_ADC_LMT2  0x12
-#define ES8311_ADC_LMT3  0x13
-#define ES8311_ADC_LMT4  0x14
-#define ES8311_ADC_MUTE  0x15
 #define ES8311_DAC_SEL   0x16
 #define ES8311_ADC_SEL   0x17
 #define ES8311_DAC_MUTE  0x18
-#define ES8311_CHARGE    0x19
 #define ES8311_GPIO_EN   0x1B
 
 static bool es8311_write(uint8_t reg, uint8_t val) {
@@ -52,18 +42,17 @@ static bool es8311_init(void) {
   es8311_write(ES8311_RESET, 0x00);
   delay(50);
 
-  // Power up DAC, ADC, clock
   es8311_write(ES8311_CLK_MAN,  0x48);
   es8311_write(ES8311_CLK_AD1,  0x00);
-  es8311_write(ES8311_CLK_AD2,  0x24);  // MCLK=256*FS
+  es8311_write(ES8311_CLK_AD2,  0x24);
   es8311_write(ES8311_DAC_PWR,  0x00);
   es8311_write(ES8311_DAC_PWR2, 0x08);
   es8311_write(ES8311_ADC_PWR,  0x00);
-  es8311_write(ES8311_DAC_CTL,  0x18);  // 16-bit, I2S format
+  es8311_write(ES8311_DAC_CTL,  0x08);  // I2S, 16-bit
   es8311_write(ES8311_DAC_SEL,  0x1A);  // DAC from I2S
   es8311_write(ES8311_ADC_SEL,  0xA0);
   es8311_write(ES8311_DAC_MUTE, 0x00);  // unmute
-  es8311_write(ES8311_DAC_VOL,  0x18);  // 0dB
+  es8311_write(ES8311_DAC_VOL,  0x28);  // ~80% vol
 
   USBSerial.println("ES8311: OK");
   return true;
@@ -94,7 +83,6 @@ static bool i2s_init_tx(void) {
   if (err != ESP_OK) { USBSerial.printf("I2S: install err %d\n", err); return false; }
   err = i2s_set_pin(I2S_NUM_0, &pins);
   if (err != ESP_OK) { USBSerial.printf("I2S: pin err %d\n", err); return false; }
-
   USBSerial.println("I2S: OK");
   return true;
 }
@@ -102,30 +90,10 @@ static bool i2s_init_tx(void) {
 bool audio_init(void) {
   pinMode(PA_EN, OUTPUT);
   digitalWrite(PA_EN, LOW);
-
-  if (!es8311_init()) {
-    USBSerial.println("Audio: ES8311 init FAILED");
-    return false;
-  }
-  if (!i2s_init_tx()) {
-    USBSerial.println("Audio: I2S init FAILED");
-    return false;
-  }
-
+  if (!es8311_init()) return false;
+  if (!i2s_init_tx()) return false;
   digitalWrite(PA_EN, HIGH);
   USBSerial.println("Audio: ready");
-  return true;
-}
-
-bool audio_play_sine(int freq_hz, int duration_ms) {
-  int total = (44100 * duration_ms) / 1000;
-  int16_t *buf = (int16_t *)malloc(total * sizeof(int16_t));
-  if (!buf) return false;
-  for (int i = 0; i < total; i++)
-    buf[i] = (int16_t)(sinf(2.0f * M_PI * freq_hz * i / 44100.0f) * 16000.0f);
-  size_t written;
-  i2s_write(I2S_NUM_0, buf, total * sizeof(int16_t), &written, portMAX_DELAY);
-  free(buf);
   return true;
 }
 
@@ -148,14 +116,33 @@ struct __attribute__((packed)) WavHeader {
 
 static volatile bool playing = false;
 
+static void play_wav_task(void *param);
+
+bool audio_play_wav(const char *path) {
+  if (playing) return false;
+  char *copy = strdup(path);
+  if (!copy) return false;
+  playing = true;
+  xTaskCreate(play_wav_task, "audio_play", 4096, copy, 1, NULL);
+  return true;
+}
+
 static void play_wav_task(void *param) {
-  const char *path = (const char *)param;
+  char *path = (char *)param;
   File f = SD_MMC.open(path);
-  if (!f) { playing = false; vTaskDelete(NULL); return; }
+
+  if (!f) {
+    USBSerial.printf("Audio: can't open %s\n", path);
+    free(path); playing = false; vTaskDelete(NULL); return;
+  }
+  USBSerial.printf("Playing: %s\n", path);
+  free(path);  // path no longer needed
 
   WavHeader hdr;
-  if (f.read((uint8_t*)&hdr, sizeof(hdr)) != sizeof(hdr) ||
-      memcmp(hdr.riff, "RIFF", 4) != 0 || memcmp(hdr.wave, "WAVE", 4) != 0) {
+  size_t nr = f.read((uint8_t*)&hdr, sizeof(hdr));
+  if (nr != sizeof(hdr) || memcmp(hdr.riff, "RIFF", 4) != 0 ||
+      memcmp(hdr.wave, "WAVE", 4) != 0) {
+    USBSerial.println("Audio: invalid WAV");
     f.close(); playing = false; vTaskDelete(NULL); return;
   }
 
@@ -163,24 +150,17 @@ static void play_wav_task(void *param) {
   uint8_t *buf = (uint8_t *)malloc(1024);
   if (!buf) { f.close(); playing = false; vTaskDelete(NULL); return; }
 
-  USBSerial.printf("Playing: %s (%luHz)\n", path, hdr.sample_rate);
   while (playing && f.available()) {
     int n = f.read(buf, 1024);
     if (n <= 0) break;
     size_t written;
     i2s_write(I2S_NUM_0, buf, n, &written, portMAX_DELAY);
   }
+
   free(buf); f.close();
   playing = false;
   USBSerial.println("Playback done");
   vTaskDelete(NULL);
-}
-
-bool audio_play_wav(const char *path) {
-  if (playing) return false;
-  playing = true;
-  xTaskCreate(play_wav_task, "audio_play", 4096, (void*)path, 1, NULL);
-  return true;
 }
 
 void audio_stop(void) {
