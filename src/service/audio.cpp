@@ -1,6 +1,7 @@
 #include "audio.h"
 #include "pin_config.h"
 #include <Arduino.h>
+#include <math.h>
 #include <Wire.h>
 #include <driver/i2s.h>
 #include <FS.h>
@@ -94,10 +95,24 @@ bool audio_init(void) {
   if (!i2s_init_tx()) return false;
   digitalWrite(PA_EN, HIGH);
   USBSerial.println("Audio: ready");
+  USBSerial.println("Audio: beep...");
+  audio_play_sine(1000, 500);
   return true;
 }
 
 // WAV header
+bool audio_play_sine(int freq_hz, int duration_ms) {
+  int total = (44100 * duration_ms) / 1000;
+  int16_t *buf = (int16_t *)malloc(total * sizeof(int16_t));
+  if (!buf) return false;
+  for (int i = 0; i < total; i++)
+    buf[i] = (int16_t)(sinf(2.0f * M_PI * freq_hz * i / 44100.0f) * 16000.0f);
+  size_t written;
+  i2s_write(I2S_NUM_0, buf, total * sizeof(int16_t), &written, portMAX_DELAY);
+  free(buf);
+  return true;
+}
+
 struct __attribute__((packed)) WavHeader {
   char riff[4];
   uint32_t file_size;
