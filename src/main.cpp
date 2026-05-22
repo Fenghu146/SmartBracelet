@@ -16,6 +16,8 @@
 #include "stopwatch.h"
 #include "weather.h"
 #include "activity.h"
+#include "service/tf_card.h"
+#include "service/audio.h"
 #include <math.h>
 #include <esp_sleep.h>
 
@@ -328,14 +330,22 @@ static uint16_t read_batt_voltage_raw(void) {
 static int read_batt_percent_raw(void) {
   return pmu.readRegister(0xA4);
 }
+static bool batt_is_valid(void) {
+  uint16_t mv = read_batt_voltage_raw();
+  return (mv >= 500 && mv <= 5000);  // reject floating ADC noise
+}
 
 static void update_sensor_page(void) {
   lv_label_set_text_fmt(accel_label, "ACC %+03d %+03d %+03d",
     (int)(acc.x * 100), (int)(acc.y * 100), (int)(acc.z * 100));
   lv_label_set_text_fmt(gyro_label, "GYR %+04d %+04d %+04d",
     (int)(gyr.x * 10), (int)(gyr.y * 10), (int)(gyr.z * 10));
-  lv_label_set_text_fmt(batt_volt_label, "BAT %dmV %d%%",
-    read_batt_voltage_raw(), read_batt_percent_raw());
+  if (batt_is_valid()) {
+    lv_label_set_text_fmt(batt_volt_label, "BAT %dmV %d%%",
+      read_batt_voltage_raw(), read_batt_percent_raw());
+  } else {
+    lv_label_set_text(batt_volt_label, "BAT USB");
+  }
 }
 
 static void switch_page(int dir) {
@@ -361,7 +371,8 @@ static void update_watchface(void) {
   lv_label_set_text(date_label, date_str);
 
   int batt = read_batt_percent_raw();
-  if (batt >= 0 && batt <= 100 && batt != last_batt) {
+  bool batt_ok = batt_is_valid();
+  if (batt_ok && batt >= 0 && batt <= 100 && batt != last_batt) {
     last_batt = batt;
     lv_label_set_text_fmt(battery_label, "%d%%", batt);
     lv_obj_set_style_text_color(battery_label,
@@ -374,6 +385,12 @@ static void update_watchface(void) {
       batt < 20 ? lv_color_hex(0xff3333) :
       batt < 50 ? lv_color_hex(0xffaa00) : lv_color_hex(0x00d4ff), 0);
     ble_srv_update_battery(batt);
+  } else if (!batt_ok && last_batt != -2) {
+    last_batt = -2;
+    lv_label_set_text(battery_label, "USB");
+    lv_obj_set_style_text_color(battery_label, lv_color_hex(0x00d488), 0);
+    lv_obj_set_width(battery_bar, 20);
+    lv_obj_set_style_bg_color(battery_bar, lv_color_hex(0x00d488), 0);
   }
 
   if (charging_label) {
@@ -599,6 +616,8 @@ void setup() {
 
   ble_srv_init();
   wifi_ntp_init();
+  tf_init();
+  audio_init();
   USBSerial.println("Ready");
 }
 
