@@ -5,15 +5,28 @@
 #include <SD_MMC.h>
 
 bool tf_init(void) {
+  // Attempt 1: SDMMC 1-bit with explicit pins
+  USBSerial.printf("TF: trying SDMMC pins CLK=%d CMD=%d D0=%d ...\n",
+    SDMMC_CLK, SDMMC_CMD, SDMMC_D0);
   SD_MMC.setPins(SDMMC_CLK, SDMMC_CMD, SDMMC_D0);
-  if (!SD_MMC.begin("/sdcard", true)) {
-    USBSerial.println("TF: mount failed");
-    return false;
+  if (SD_MMC.begin("/sdcard", true)) {
+    uint64_t total = SD_MMC.totalBytes() / 1024;
+    uint64_t used = SD_MMC.usedBytes() / 1024;
+    USBSerial.printf("TF: SDMMC OK, %lluKB total, %lluKB used\n", total, used);
+    return true;
   }
-  uint64_t total = SD_MMC.totalBytes() / 1024;
-  uint64_t used = SD_MMC.usedBytes() / 1024;
-  USBSerial.printf("TF: mounted, %lluKB total, %lluKB used\n", total, used);
-  return true;
+  USBSerial.println("TF: SDMMC failed (card type? format? try FAT32)");
+
+  // Attempt 2: SDMMC without explicit setPins (use SDK defaults)
+  USBSerial.println("TF: trying SDMMC without setPins...");
+  if (SD_MMC.begin("/sdcard", true)) {
+    USBSerial.printf("TF: SDMMC (no setPins) OK, %lluKB total\n",
+      SD_MMC.totalBytes() / 1024);
+    return true;
+  }
+  USBSerial.println("TF: all attempts failed");
+  USBSerial.println("  -> Check: card inserted? FAT32? <32GB?");
+  return false;
 }
 
 bool tf_available(void) {
