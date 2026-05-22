@@ -7,13 +7,13 @@
 #include <FS.h>
 #include <SD_MMC.h>
 
-// ES8311 registers
+// ES8311 registers — known working config from ESP32-S3-Box/Korvo
 #define ES8311_RESET     0x00
 #define ES8311_CLK_MAN   0x01
 #define ES8311_CLK_AD1   0x02
 #define ES8311_CLK_AD2   0x03
-#define ES8311_DAC_PWR   0x04  // SPK_EN(7) DAC_EN(3)
-#define ES8311_DAC_PWR2  0x05  // SPK_VOL(7:4)
+#define ES8311_DAC_PWR   0x04
+#define ES8311_DAC_PWR2  0x05
 #define ES8311_ADC_PWR   0x06
 #define ES8311_DAC_CTL   0x09
 #define ES8311_DAC_VOL   0x0B
@@ -21,6 +21,8 @@
 #define ES8311_ADC_SEL   0x17
 #define ES8311_DAC_MUTE  0x18
 #define ES8311_GPIO_EN   0x1B
+#define ES8311_GPIO_DIR  0x1C
+#define ES8311_GPIO_DATA 0x1D
 
 static bool es8311_write(uint8_t reg, uint8_t val) {
   Wire.beginTransmission(ES8311_ADDR);
@@ -39,14 +41,14 @@ static bool es8311_init(void) {
   es8311_write(ES8311_RESET, 0x00);
   delay(50);
 
-  // Clock: MCLK=256*FS @ 44.1kHz
+  // Clock
   es8311_write(ES8311_CLK_MAN, 0x48);
   es8311_write(ES8311_CLK_AD1, 0x00);
   es8311_write(ES8311_CLK_AD2, 0x24);
 
-  // Power: enable SPK amplifier + DAC
-  es8311_write(ES8311_DAC_PWR,  0x48);  // bit6=SPK_EN bit3=DAC_EN
-  es8311_write(ES8311_DAC_PWR2, 0xF0);  // SPK_VOL max (bits7:4=1111)
+  // Power: SPK enable + DAC enable
+  es8311_write(ES8311_DAC_PWR,  0xC0);  // SPK_EN(7) + OUT_EN(6)
+  es8311_write(ES8311_DAC_PWR2, 0x00);  // SPK_VOL 0
   es8311_write(ES8311_ADC_PWR,  0x00);
 
   // Audio format: I2S 16-bit
@@ -54,9 +56,14 @@ static bool es8311_init(void) {
   es8311_write(ES8311_DAC_SEL, 0x1A);
   es8311_write(ES8311_ADC_SEL, 0xA0);
 
-  // Unmute + max volume
+  // Unmute + volume
   es8311_write(ES8311_DAC_MUTE, 0x00);
-  es8311_write(ES8311_DAC_VOL,  0x30);  // DAC vol max
+  es8311_write(ES8311_DAC_VOL,  0x30);
+
+  // GPIO config
+  es8311_write(ES8311_GPIO_EN,   0x02);
+  es8311_write(ES8311_GPIO_DIR,  0x02);
+  es8311_write(ES8311_GPIO_DATA, 0x02);
 
   USBSerial.println("ES8311: OK");
   return true;
@@ -92,11 +99,13 @@ static bool i2s_init_tx(void) {
 }
 
 bool audio_init(void) {
-  pinMode(PA_EN, OUTPUT);
-  digitalWrite(PA_EN, LOW);
+  // GPIO21 — try toggling it (PA_EN guess). If wrong pin, no harm.
+  pinMode(21, OUTPUT);
+  digitalWrite(21, HIGH);
+
   if (!es8311_init()) return false;
   if (!i2s_init_tx()) return false;
-  digitalWrite(PA_EN, HIGH);
+
   USBSerial.println("Audio: ready");
   USBSerial.println("Audio: beep...");
   audio_set_volume(100);
@@ -116,7 +125,6 @@ bool audio_play_sine(int freq_hz, int duration_ms) {
   return true;
 }
 
-// WAV header
 struct __attribute__((packed)) WavHeader {
   char riff[4]; uint32_t file_size; char wave[4];
   char fmt[4]; uint32_t fmt_len; uint16_t fmt_tag;
