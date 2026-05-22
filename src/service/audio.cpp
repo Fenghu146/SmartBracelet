@@ -1,3 +1,6 @@
+// ES8311 audio codec + PCA9557 I2C I/O expander (PA_EN control)
+// Pin assignments verified against Waveshare ESP32-S3-Touch-LCD-1.83 schematic
+
 #include "audio.h"
 #include "pin_config.h"
 #include <Arduino.h>
@@ -7,22 +10,63 @@
 #include <FS.h>
 #include <SD_MMC.h>
 
-// ES8311 registers — known working config from ESP32-S3-Box/Korvo
-#define ES8311_RESET     0x00
-#define ES8311_CLK_MAN   0x01
-#define ES8311_CLK_AD1   0x02
-#define ES8311_CLK_AD2   0x03
-#define ES8311_DAC_PWR   0x04
-#define ES8311_DAC_PWR2  0x05
-#define ES8311_ADC_PWR   0x06
-#define ES8311_DAC_CTL   0x09
-#define ES8311_DAC_VOL   0x0B
-#define ES8311_DAC_SEL   0x16
-#define ES8311_ADC_SEL   0x17
-#define ES8311_DAC_MUTE  0x18
-#define ES8311_GPIO_EN   0x1B
-#define ES8311_GPIO_DIR  0x1C
-#define ES8311_GPIO_DATA 0x1D
+// --- PCA9557 I2C I/O expander (address 0x19) ---
+// IO0=LCD_CS, IO1=PA_EN, IO2=DVP_PWDN
+#define PCA9557_INPUT     0x00
+#define PCA9557_OUTPUT    0x01
+#define PCA9557_INVERT    0x02
+#define PCA9557_CONFIG    0x03
+#define PA_EN_BIT         0x02  // BIT(1)
+
+static bool pca9557_write(uint8_t reg, uint8_t val) {
+  Wire.beginTransmission(PCA9557_ADDR);
+  Wire.write(reg);
+  Wire.write(val);
+  return Wire.endTransmission() == 0;
+}
+
+static bool pca9557_init(void) {
+  // Set IO0/IO1/IO2 as outputs (0=output), others as inputs (1=input)
+  if (!pca9557_write(PCA9557_CONFIG, 0xF8)) {
+    USBSerial.println("PCA9557: no response");
+    return false;
+  }
+  // Set initial output: LCD_CS=1(high), PA_EN=1(high), DVP_PWDN=1(high)
+  pca9557_write(PCA9557_OUTPUT, 0x07);
+  USBSerial.println("PCA9557: PA_EN enabled");
+  return true;
+}
+
+// --- ES8311 I2S audio codec (address 0x18) ---
+// Register map from Everest ES8311 datasheet
+#define ES8311_RESET    0x00  // reset + CSM_ON
+#define ES8311_CLK1     0x01  // MCLK_SEL, MCLK_ON, BCLK_ON
+#define ES8311_CLK2     0x02  // pre-divider, multiplier
+#define ES8311_CLK3     0x03  // ADC OSR
+#define ES8311_CLK4     0x04  // DAC OSR
+#define ES8311_CLK5     0x05  // ADC/DAC clock divider
+#define ES8311_CLK6     0x06  // BCLK config
+#define ES8311_CLK7     0x07  // LRCK divider HI + tri-state
+#define ES8311_CLK8     0x08  // LRCK divider LO
+#define ES8311_SDP_IN   0x09  // serial data port input (I2S format)
+#define ES8311_SDP_OUT  0x0A  // serial data port output
+#define ES8311_PWR_A    0x0B  // power up sequence A
+#define ES8311_PWR_B    0x0C  // power up sequence B
+#define ES8311_PWR_C    0x0D  // power up sequence C
+#define ES8311_PWR_D    0x0E  // power up sequence D
+#define ES8311_PWR_E    0x0F  // power up sequence E
+#define ES8311_VMID     0x10  // VMID, bias, ref
+#define ES8311_VOLT     0x11  // internal voltage select
+#define ES8311_ANA      0x12  // analog mux
+#define ES8311_OUT      0x13  // output routing: BIT4=HPSW (0=line,1=headphone)
+#define ES8311_ADC_CTL  0x16  // ADC control + gain
+#define ES8311_ADC_HPF  0x1B  // ADC auto-mute, HPF
+#define ES8311_ADC_FLT  0x1C  // ADC filter
+#define ES8311_ADC_CTL2 0x1D  // ADC control 2
+#define ES8311_DAC_CTL1 0x31  // DAC control: mute
+#define ES8311_DAC_VOL  0x32  // DAC volume: 0x00=-95dB ... 0xBF=0dB ... 0xFF=+32dB
+#define ES8311_DAC_MISC 0x37  // DAC misc (default 0x08)
+#define ES8311_GPIO     0x44  // GPIO function, ADCDAT_SEL
 
 static bool es8311_write(uint8_t reg, uint8_t val) {
   Wire.beginTransmission(ES8311_ADDR);
@@ -32,43 +76,54 @@ static bool es8311_write(uint8_t reg, uint8_t val) {
 }
 
 static bool es8311_init(void) {
-  delay(10);
+  // 1. Reset
   if (!es8311_write(ES8311_RESET, 0x1F)) {
-    USBSerial.println("ES8311: I2C not responding");
+    USBSerial.println("ES8311: I2C no response");
     return false;
   }
   delay(10);
-  es8311_write(ES8311_RESET, 0x00);
+  es8311_write(ES8311_RESET, 0x02);  // clear reset, keep SEQ_DIS
   delay(50);
 
-  // Clock
-  es8311_write(ES8311_CLK_MAN, 0x48);
-  es8311_write(ES8311_CLK_AD1, 0x00);
-  es8311_write(ES8311_CLK_AD2, 0x24);
+  // 2. Clock config (MCLK from I2S, 44.1kHz, MCLK=256FS)
+  es8311_write(ES8311_CLK1, 0x30);  // MCLK_ON + BCLK_ON
+  es8311_write(ES8311_CLK2, 0x00);  // pre=1, mult=1
+  es8311_write(ES8311_CLK3, 0x10);  // ADC OSR=64
+  es8311_write(ES8311_CLK4, 0x10);  // DAC OSR=64
+  es8311_write(ES8311_CLK5, 0x00);  // div_clk_adc=0, div_clk_dac=0
+  es8311_write(ES8311_CLK6, 0x03);  // BCLK continuous, div=3
 
-  // Power: SPK enable + DAC enable
-  es8311_write(ES8311_DAC_PWR,  0xC0);  // SPK_EN(7) + OUT_EN(6)
-  es8311_write(ES8311_DAC_PWR2, 0x00);  // SPK_VOL 0
-  es8311_write(ES8311_ADC_PWR,  0x00);
+  // 3. Digital audio interface: I2S, 24-bit
+  es8311_write(ES8311_SDP_IN,  0x08);  // I2S, 16-bit
+  es8311_write(ES8311_SDP_OUT, 0x00);
 
-  // Audio format: I2S 16-bit
-  es8311_write(ES8311_DAC_CTL, 0x08);
-  es8311_write(ES8311_DAC_SEL, 0x1A);
-  es8311_write(ES8311_ADC_SEL, 0xA0);
+  // 4. Power up
+  es8311_write(ES8311_PWR_A, 0x00);
+  es8311_write(ES8311_PWR_B, 0x00);
+  es8311_write(ES8311_PWR_C, 0x1F);
+  es8311_write(ES8311_PWR_D, 0x1F);
+  es8311_write(ES8311_PWR_E, 0x1F);
 
-  // Unmute + volume
-  es8311_write(ES8311_DAC_MUTE, 0x00);
-  es8311_write(ES8311_DAC_VOL,  0x30);
+  // 5. Analog: VMID, bias, reference
+  es8311_write(ES8311_VMID, 0x1F);  // VMID=high, bias=normal, ref=enabled
+  es8311_write(ES8311_VOLT, 0x7F);  // internal voltage
 
-  // GPIO config
-  es8311_write(ES8311_GPIO_EN,   0x02);
-  es8311_write(ES8311_GPIO_DIR,  0x02);
-  es8311_write(ES8311_GPIO_DATA, 0x02);
+  // 6. Output routing: line out (not headphone amp)
+  es8311_write(ES8311_OUT, 0x00);   // HPSW=0 → line output mode
+
+  // 7. Start state machine
+  es8311_write(ES8311_RESET, 0x80); // CSM_ON=1 (slave mode)
+
+  // 8. Unmute + set volume
+  es8311_write(ES8311_DAC_CTL1, 0x00);  // unmute
+  es8311_write(ES8311_DAC_MISC, 0x08);  // default
+  es8311_write(ES8311_DAC_VOL,  0xBF);  // 0dB
 
   USBSerial.println("ES8311: OK");
   return true;
 }
 
+// --- I2S driver ---
 static bool i2s_init_tx(void) {
   i2s_config_t cfg = {};
   cfg.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
@@ -98,13 +153,21 @@ static bool i2s_init_tx(void) {
   return true;
 }
 
+// --- Public API ---
 bool audio_init(void) {
-  // GPIO21 — try toggling it (PA_EN guess). If wrong pin, no harm.
-  pinMode(21, OUTPUT);
-  digitalWrite(21, HIGH);
+  // Enable amplifier via PCA9557 first
+  if (!pca9557_init()) {
+    USBSerial.println("Audio: PCA9557 init FAILED, amp may be off");
+  }
 
-  if (!es8311_init()) return false;
-  if (!i2s_init_tx()) return false;
+  if (!es8311_init()) {
+    USBSerial.println("Audio: ES8311 init FAILED");
+    return false;
+  }
+  if (!i2s_init_tx()) {
+    USBSerial.println("Audio: I2S init FAILED");
+    return false;
+  }
 
   USBSerial.println("Audio: ready");
   USBSerial.println("Audio: beep...");
@@ -178,6 +241,10 @@ static void play_wav_task(void *param) {
 void audio_stop(void) { playing = false; i2s_zero_dma_buffer(I2S_NUM_0); }
 void audio_set_volume(uint8_t vol) {
   if (vol > 100) vol = 100;
-  es8311_write(ES8311_DAC_VOL, (vol * 0x30) / 100);
+  // DAC_VOL: 0x00=-95dB ... 0xBF=0dB ... 0xFF=+32dB
+  uint8_t reg = (vol * 0xBF) / 100;
+  if (reg > 0xBF) reg = 0xBF;
+  if (reg < 0x01) reg = 0x01;
+  es8311_write(ES8311_DAC_VOL, reg);
 }
 bool audio_is_playing(void) { return playing; }

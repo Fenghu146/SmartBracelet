@@ -30,5 +30,6 @@
 #define I2S_WS   45
 #define I2S_DO   8
 #define I2S_DI   10
-#define PA_EN    21
+// PA_EN via PCA9557 IO1 (see audio.cpp)
+#define PCA9557_ADDR 0x19
 #define ES8311_ADDR 0x18
