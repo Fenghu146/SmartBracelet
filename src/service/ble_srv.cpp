@@ -18,7 +18,15 @@ static BLECharacteristic *pBatteryChar = nullptr;
 static BLECharacteristic *pNotifyChar = nullptr;
 static BLECharacteristic *pTxChar = nullptr;
 
+// Data service characteristics
+static BLECharacteristic *pStepChar = nullptr;
+static BLECharacteristic *pBattRawChar = nullptr;
+static BLECharacteristic *pActChar = nullptr;
+
 NotificationData ble_notification = {0};
+uint32_t ble_steps = 0;
+uint16_t ble_batt_raw = 0;
+int  ble_activity = 0;
 
 class ServerCallbacks : public BLEServerCallbacks
 {
@@ -126,6 +134,35 @@ static void setup_notification_service(BLEServer *server)
     svc->start();
 }
 
+// ── Data service: watch → phone telemetry ──────────────────────
+static void setup_data_service(BLEServer *server)
+{
+    BLEService *svc = server->createService(
+        BLEUUID("abcd1000-0000-1000-8000-00805f9b34fb"));
+
+    pStepChar = svc->createCharacteristic(
+        BLEUUID("abcd1001-0000-1000-8000-00805f9b34fb"),
+        BLECharacteristic::PROPERTY_READ |
+        BLECharacteristic::PROPERTY_NOTIFY);
+    pStepChar->addDescriptor(new BLE2902());
+    pStepChar->setValue(ble_steps);
+
+    pBattRawChar = svc->createCharacteristic(
+        BLEUUID("abcd1002-0000-1000-8000-00805f9b34fb"),
+        BLECharacteristic::PROPERTY_READ);
+    pBattRawChar->setValue(ble_batt_raw);
+
+    pActChar = svc->createCharacteristic(
+        BLEUUID("abcd1003-0000-1000-8000-00805f9b34fb"),
+        BLECharacteristic::PROPERTY_READ |
+        BLECharacteristic::PROPERTY_NOTIFY);
+    pActChar->addDescriptor(new BLE2902());
+    pActChar->setValue(ble_activity);
+
+    svc->start();
+    USBSerial.println("BLE: DataService started");
+}
+
 void ble_srv_init(void)
 {
     BLEDevice::init(DEVICE_NAME);
@@ -142,11 +179,13 @@ void ble_srv_init(void)
     setup_battery_service(pServer);
     setup_current_time(pServer);
     setup_notification_service(pServer);
+    setup_data_service(pServer);
 
     BLEAdvertising *adv = pServer->getAdvertising();
     adv->addServiceUUID(BLEUUID((uint16_t)0x180F));
     adv->addServiceUUID(BLEUUID((uint16_t)0x1805));
     adv->addServiceUUID(BLEUUID("abcd0001-0000-1000-8000-00805f9b34fb"));
+    adv->addServiceUUID(BLEUUID("abcd1000-0000-1000-8000-00805f9b34fb"));
     adv->setScanResponse(true);
     adv->setMinPreferred(0x06);
     adv->setMinPreferred(0x12);
@@ -194,6 +233,40 @@ void ble_srv_send(const char *data)
         pTxChar->setValue((uint8_t *)data, len);
         pTxChar->notify();
         USBSerial.printf("BLE notify: sent (%d bytes)\n", len);
+    }
+}
+
+// ── Data service updates ──────────────────────────────────────
+void ble_srv_update_steps(uint32_t steps)
+{
+    if (!pStepChar) return;
+    ble_steps = steps;
+    pStepChar->setValue(ble_steps);
+    if (ble_is_connected()) {
+        pStepChar->notify();
+        USBSerial.printf("BLE data: steps=%lu\n", steps);
+    }
+}
+
+void ble_srv_update_batt_raw(uint16_t mv)
+{
+    if (!pBattRawChar) return;
+    ble_batt_raw = mv;
+    pBattRawChar->setValue(ble_batt_raw);
+    if (ble_is_connected())
+        USBSerial.printf("BLE data: batt=%dmV\n", mv);
+}
+
+void ble_srv_update_activity(uint8_t act)
+{
+    if (!pActChar) return;
+    ble_activity = act;
+    pActChar->setValue(ble_activity);
+    if (ble_is_connected()) {
+        pActChar->notify();
+        static const char *names[] = {"walk", "run", "idle"};
+        USBSerial.printf("BLE data: activity=%s\n",
+            act < 3 ? names[act] : "?");
     }
 }
 
