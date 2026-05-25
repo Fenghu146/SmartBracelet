@@ -1026,3 +1026,57 @@ codegraph search "CST816S"
 2. 索引通过文件监听器自动增量更新（~500ms 延迟）
 3. 首次进入新项目需运行 `codegraph install` 初始化
 4. 不同项目的 `.codegraph/` 相互独立，每个约 7MB
+
+---
+
+## Session 12: BLE DataService + Flutter 手机 App 脚手架 (2026-05-25)
+
+### 概述
+
+建立手表 → 手机的 BLE 上行数据通道，搭建 Flutter 手机 App 项目框架。
+
+### 手表固件：BLE DataService 新增
+
+**问题**：手表 BLE 只有通知推送（手机→手表），缺少手表→手机的上行数据通道，手机无法读取步数/电量/活动数据。
+
+**改动**：
+
+| 文件 | 变更 |
+|------|------|
+| `src/service/ble_srv.h` | + 3 个外部变量 + 3 个更新函数声明 |
+| `src/service/ble_srv.cpp` | + `setup_data_service()` — 新增 Service `abcd1000-...`，3 个特征值 (Steps uint32 READ+NOTIFY, BatteryRaw uint16 READ, Activity uint8 READ+NOTIFY) |
+| `src/main.cpp` | + BLE 数据推送逻辑，USB 充电时电池标 0xFFFF |
+| `src/activity.h/cpp` | + `activity_get_current()` 暴露当前活动识别结果 |
+
+**验证**：nRF Connect 读到步数 `0x 12-00-00-00` (=18步)，串口打印 `BLE data: steps=26` 等实时推送日志。
+
+### 手机 App：Flutter 项目搭建
+
+| 步骤 | 结果 |
+|------|------|
+| Flutter 3.44.0 安装 | ✅ 用户目录下 |
+| Android SDK 36 | ✅ 已装 |
+| 国内镜像 | ✅ pub/Gradle/Maven 全部配置 |
+| 项目 | `watch_app/` 完整结构，含 BLE 通信层 |
+
+**未完成**：Gradle 构建 SSL 证书问题，`flutter build apk` 被中断。
+
+### 文件变更
+
+| 文件 | 说明 |
+|------|------|
+| `src/service/ble_srv.h` | DataService 声明 |
+| `src/service/ble_srv.cpp` | +73 行 DataService |
+| `src/main.cpp` | BLE 推送 |
+| `src/activity.h/.cpp` | `activity_get_current()` |
+| `DEVELOPMENT_PLAN.md` | 加入手机 App + 分布式 AI 计划 |
+| `watch_app/` | **新建** Flutter 项目 |
+
+### 卡住点
+
+1. **APK 构建失败** — Gradle SSL 证书验证。已改腾讯云 Gradle 镜像，但证书链仍需修复。
+2. **Flutter 未加到用户 PATH** — 仅当前进程有效。
+
+### 下一步
+
+修复 Gradle SSL → 出 APK → 手机验证 BLE → 逐步叠加功能。

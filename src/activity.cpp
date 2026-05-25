@@ -20,6 +20,8 @@ static int last_pred = -1;
 static int stable_pred = -1;
 static int stable_count = 0;
 
+int activity_get_current(void) { return stable_pred; }
+
 void activity_push_data(float ax, float ay, float az,
                         float gx, float gy, float gz) {
   buf[head][0] = ax;

@@ -73,6 +73,9 @@ static bool analog_inited = false;
 static const int CX = 120, CY = 142; // screen center
 static lv_obj_t *dial_marks[12];
 
+// Activity state for BLE data service
+static int current_activity = -1; // -1=unknown, 0=walk, 1=run, 2=idle
+
 // NTP sync
 static unsigned long last_ntp_attempt = 0;
 static bool ntp_synced = false;
@@ -99,13 +102,6 @@ void set_rtc_from_tm(struct tm *ti) {
   rtc.setDateTime(ti->tm_year + 1900, ti->tm_mon + 1, ti->tm_mday,
     ti->tm_hour, ti->tm_min, ti->tm_sec);
   USBSerial.println("RTC: time updated from NTP");
-}
-
-static void set_dot(int active) {
-  if (!page_dots) return;
-  char dots[] = "○ ○ ○ ○ ○ ○ ○ ○";
-  dots[active * 2] = '●';
-  lv_label_set_text(page_dots, dots);
 }
 
 static void status_bar_create(lv_obj_t *parent) {
@@ -357,7 +353,6 @@ static void switch_page(int dir) {
   lv_scr_load_anim(pages[next],
     dir > 0 ? LV_SCR_LOAD_ANIM_MOVE_LEFT : LV_SCR_LOAD_ANIM_MOVE_RIGHT,
     200, 0, false);
-  set_dot(next);
 }
 
 static void update_watchface(void) {
@@ -676,6 +671,18 @@ void loop() {
     if (current_page == 5) weather_update();
     if (current_page == 6) activity_update();
     if (current_page == 7) player_update();
+
+    // Push telemetry to BLE data service
+    int act = activity_get_current();
+    if (act != current_activity) {
+      current_activity = act;
+      ble_srv_update_activity(act >= 0 ? (uint8_t)act : 2);
+    }
+    ble_srv_update_steps(step_count);
+    if (batt_is_valid())
+      ble_srv_update_batt_raw(read_batt_voltage_raw());
+    else if (pmu.isVbusIn())
+      ble_srv_update_batt_raw(0xFFFF);  // USB powered
   }
 
   // Stopwatch needs sub-second precision
