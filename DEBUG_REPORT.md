@@ -1080,3 +1080,98 @@ codegraph search "CST816S"
 ### 下一步
 
 修复 Gradle SSL → 出 APK → 手机验证 BLE → 逐步叠加功能。
+
+---
+
+## Session 13: Web Bluetooth 手机 App — HTML + Capacitor (2026-05-28)
+
+### 概述
+
+放弃 Flutter 方案，改用 **HTML/CSS/JS 单文件** + **Capacitor 打包** 实现手机 App。支持两个平台：
+- **Chrome 桌面**：Web Bluetooth API（系统设备选择器）
+- **Android App**：Capacitor + `@capacitor-community/bluetooth-le` 插件
+
+### 完成内容
+
+| 功能 | 实现 |
+|------|------|
+| BLE 连接 | 桌面：Web Bluetooth `requestDevice(acceptAllDevices:true)`；App：Capacitor 扫描 + 选择连接 |
+| 实时仪表盘 | 步数（uint32 LE）、电量（标准 Battery Service 0-100% + 原始 mV）、活动状态（Walk/Run/Idle） |
+| 通知发送 | 表单填写 App ID/Title/Body → 写入 `abcd0002` → 监听 ACK 确认 |
+| 时间同步 | 连接时写入 CTS 时间到 `0x2A2B`（10 字节格式） |
+| UI | 暗色主题 + 青色 (#00d4ff) 强调色，卡片布局，脉冲动画，数字变化闪烁效果 |
+| 设备扫描 | Android App 端扫描附近所有 BLE 设备，高亮 SmartBracelet |
+| 调试面板 | 可折叠的原始 hex 数据视图 |
+
+### BLE 协议对接
+
+固件已定义的服务（无需修改固件）：
+
+| 服务 | UUID | 数据格式 |
+|------|------|----------|
+| Data Service | `abcd1000-...` | Steps `abcd1001` (4B uint32 LE, NOTIFY) |
+| | | BattRaw `abcd1002` (2B uint16 LE mV, READ) |
+| | | Activity `abcd1003` (1B 0/1/2, NOTIFY) |
+| Notification | `abcd0001-...` | RX `abcd0002` (WRITE: `"app_id\|title\|body"`) |
+| | | TX `abcd0003` (NOTIFY: `"ack:<app_id>"`) |
+| Battery | `0x180F` | Level `0x2A19` (1B 0-100%, READ+NOTIFY) |
+| Time | `0x1805` | Current `0x2A2B` (10B CTS format) |
+
+### 关键修复
+
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| `Failed to resolve module specifier "@capacitor/core"` | `<script type="module">` 中用 `import` 导入 Capacitor 模块，但 Capacitor WebView 不支持 bare specifier | 改为 `<script>` + `window.Capacitor` 全局对象访问 |
+| 顶层 `await` 语法错误 | 非 module 脚本中不能用顶层 `await` | 改为 `.then().catch()` 异步初始化 |
+| `requestDevice` 报错 "Either filters or acceptAllDevices" | `requestDevice()` 必须有 `filters` 或 `acceptAllDevices: true` | 添加 `acceptAllDevices: true` |
+| `requestPermissions()` 卡住 | Capacitor BLE 插件权限请求在某些设备上无响应 | 添加详细日志 + 错误处理 |
+| 扫描结果结构错误 | `result.deviceId` 应为 `result.device.deviceId`（嵌套结构） | 修正为 `result.device?.deviceId` |
+| `requestLEScan` 参数错误 | 传递了无效的第二个参数 `true` | 移除多余参数 |
+| Java 21 缺失 | Capacitor 8.x 需要 Java 21，系统只有 Java 17 | 下载安装 Temurin JDK 21 到 `~/jdk21/` |
+| Gradle SSL 证书问题 | `gradlew` 无法下载 Gradle 分发包 | 直接用已缓存的 Gradle 9.1.0 二进制文件构建 |
+
+### 项目结构
+
+```
+webapp/
+├── index.html              # 主文件（桌面 Chrome + Android App 通用）
+├── www/index.html          # Capacitor web 资源目录（同步自 index.html）
+├── package.json            # npm 依赖（Capacitor + BLE 插件）
+├── capacitor.config.json   # Capacitor 配置
+├── SmartBracelet-debug.apk # 可安装的 Android APK (4.1MB)
+└── android/                # Capacitor Android 原生项目
+```
+
+### 环境配置
+
+| 项目 | 版本/路径 |
+|------|-----------|
+| Node.js | v24.15.0 |
+| Java | Temurin 21.0.11 (`~/jdk21/jdk-21.0.11+10/`) |
+| Gradle | 9.1.0 (已缓存，直接用二进制) |
+| Capacitor | 8.3.4 |
+| BLE 插件 | @capacitor-community/bluetooth-le 8.2.0 |
+
+### 构建命令
+
+```bash
+export JAVA_HOME=~/jdk21/jdk-21.0.11+10
+cd webapp && npx cap sync android
+cd android && ~/.gradle/wrapper/dists/gradle-9.1.0-all/.../bin/gradle assembleDebug
+```
+
+### 当前状态
+
+- ✅ Chrome 桌面：点击按钮弹出系统蓝牙选择器，可连接手表
+- ✅ 仪表盘：步数/电量/活动实时更新
+- ✅ 通知发送：发送通知到手表，收到 ACK 确认
+- ✅ 时间同步
+- ⏳ Android App：Capacitor 扫描功能需进一步调试（`requestPermissions` 卡住）
+- ⏳ 通知页面（手表端显示手机通知）需固件配合
+
+### 下一步
+
+1. 解决 Android App 蓝牙权限问题（Vivo/小米等国产 ROM 可能需要手动授权）
+2. 测试 Chrome 桌面连接手表的完整流程
+3. 固件端添加手机通知转发功能
+4. 添加历史数据图表、步数目标设定等增强功能
