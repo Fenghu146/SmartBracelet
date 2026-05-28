@@ -1,0 +1,13 @@
+{
+  "appId": "com.smartbracelet.app",
+  "appName": "SmartBracelet",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "BLE": {
+      "displayNotifications": true
+    }
+  }
+}
