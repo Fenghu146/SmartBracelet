@@ -19,6 +19,8 @@
 #include "player.h"
 #include "service/tf_card.h"
 #include "service/audio.h"
+#include "service/voice_chat.h"
+#include "voice_chat_ui.h"
 #include <math.h>
 #include <esp_sleep.h>
 
@@ -47,8 +49,8 @@ IMUdata acc, gyr;
 static int last_batt = -1;
 static char time_str[12], date_str[32];
 static int current_page = 0;
-static const int NUM_PAGES = 8;
-static lv_obj_t *pages[8];
+static const int NUM_PAGES = 9;
+static lv_obj_t *pages[9];
 
 // Step counter with improved algorithm
 static int step_count = 0;
@@ -315,6 +317,7 @@ static void init_pages(void) {
   pages[5] = lv_obj_create(NULL); weather_create(pages[5]);
   pages[6] = lv_obj_create(NULL); activity_create(pages[6]);
   pages[7] = lv_obj_create(NULL); player_create(pages[7]);
+  pages[8] = lv_obj_create(NULL); voice_chat_page_create(pages[8]);
   status_bar_create(lv_layer_top());
   lv_scr_load(pages[0]);
 }
@@ -545,6 +548,8 @@ void setup() {
   lv_port_disp_init();
   tf_init();
   audio_init();
+  audio_init_rx();
+  voice_chat_init();
   init_pages();
 
   touch = new CST816S(TP_SDA, TP_SCL, TP_RST, TP_INT);
@@ -620,6 +625,7 @@ void setup() {
 
 void loop() {
   lv_timer_handler();
+  voice_chat_loop();
   wifi_ntp_loop();
 
   if (wifi_is_connected() && !ntp_synced) ntp_synced = wifi_ntp_sync();
@@ -671,6 +677,7 @@ void loop() {
     if (current_page == 5) weather_update();
     if (current_page == 6) activity_update();
     if (current_page == 7) player_update();
+    if (current_page == 8) voice_chat_page_update();
 
     // Push telemetry to BLE data service
     int act = activity_get_current();

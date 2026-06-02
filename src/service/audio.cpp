@@ -123,7 +123,7 @@ static bool es8311_init(void) {
   return true;
 }
 
-// --- I2S driver ---
+// --- I2S driver (TX: speaker via ES8311) ---
 static bool i2s_init_tx(void) {
   i2s_config_t cfg = {};
   cfg.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
@@ -152,6 +152,111 @@ static bool i2s_init_tx(void) {
   USBSerial.println("I2S: OK");
   return true;
 }
+
+// --- I2S driver (RX: microphone via INMP441 on I2S_NUM_1) ---
+static volatile bool rx_recording = false;
+static QueueHandle_t rx_queue = NULL;
+static TaskHandle_t rx_task_handle = NULL;
+
+#define RX_DMA_BUF_COUNT 4
+#define RX_DMA_BUF_LEN   1024  // samples per DMA buffer
+#define RX_CHUNK_SAMPLES 512   // samples per chunk sent to queue (32ms at 16kHz)
+
+static void voice_rx_task(void *param) {
+  int16_t *chunk = (int16_t *)malloc(RX_CHUNK_SAMPLES * sizeof(int16_t));
+  if (!chunk) { vTaskDelete(NULL); return; }
+
+  while (rx_recording) {
+    size_t bytes_read = 0;
+    esp_err_t err = i2s_read(I2S_NUM_1, chunk, RX_CHUNK_SAMPLES * sizeof(int16_t),
+                             &bytes_read, pdMS_TO_TICKS(500));
+    if (err == ESP_OK && bytes_read > 0) {
+      int samples = bytes_read / sizeof(int16_t);
+      // Send chunk pointer to queue (queue holds the pointer, task owns the buffer copy)
+      int16_t *copy = (int16_t *)malloc(bytes_read);
+      if (copy) {
+        memcpy(copy, chunk, bytes_read);
+        if (xQueueSend(rx_queue, &copy, pdMS_TO_TICKS(100)) != pdTRUE) {
+          free(copy);  // queue full, drop chunk
+        }
+      }
+    }
+  }
+  free(chunk);
+  rx_task_handle = NULL;
+  vTaskDelete(NULL);
+}
+
+bool audio_init_rx(void) {
+  // Configure INMP441 LRS pin as output LOW (left channel)
+  pinMode(INMP441_LRS, OUTPUT);
+  digitalWrite(INMP441_LRS, LOW);
+
+  i2s_config_t cfg = {};
+  cfg.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX);
+  cfg.sample_rate = VOICE_SAMPLE_RATE;
+  cfg.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
+  cfg.channel_format = I2S_CHANNEL_FMT_ONLY_LEFT;
+  cfg.communication_format = I2S_COMM_FORMAT_STAND_I2S;
+  cfg.intr_alloc_flags = ESP_INTR_FLAG_LEVEL1;
+  cfg.dma_buf_count = RX_DMA_BUF_COUNT;
+  cfg.dma_buf_len = RX_DMA_BUF_LEN;
+  cfg.use_apll = true;
+
+  i2s_pin_config_t pins = {};
+  pins.bck_io_num = INMP441_SCK;
+  pins.ws_io_num = INMP441_WS;
+  pins.data_out_num = I2S_PIN_NO_CHANGE;
+  pins.data_in_num = INMP441_SD;
+  pins.mck_io_num = I2S_PIN_NO_CHANGE;
+
+  esp_err_t err;
+  err = i2s_driver_install(I2S_NUM_1, &cfg, 0, NULL);
+  if (err != ESP_OK) { USBSerial.printf("I2S_RX: install err %d\n", err); return false; }
+  err = i2s_set_pin(I2S_NUM_1, &pins);
+  if (err != ESP_OK) { USBSerial.printf("I2S_RX: pin err %d\n", err); return false; }
+  i2s_stop(I2S_NUM_1);  // install but don't start yet
+
+  rx_queue = xQueueCreate(8, sizeof(int16_t *));
+  USBSerial.println("I2S_RX: INMP441 ready");
+  return true;
+}
+
+bool audio_start_recording(void) {
+  if (rx_recording) return false;
+  // Drain any leftover chunks
+  int16_t *old;
+  while (xQueueReceive(rx_queue, &old, 0) == pdTRUE) free(old);
+
+  rx_recording = true;
+  i2s_start(I2S_NUM_1);
+  xTaskCreatePinnedToCore(voice_rx_task, "voice_rx", 4096, NULL, 3, &rx_task_handle, 1);
+  USBSerial.println("Recording...");
+  return true;
+}
+
+void audio_stop_recording(void) {
+  rx_recording = false;
+  i2s_stop(I2S_NUM_1);
+  // Wait for task to exit
+  int wait = 20;
+  while (rx_task_handle && wait-- > 0) vTaskDelay(pdMS_TO_TICKS(10));
+  USBSerial.println("Recording stopped");
+}
+
+int audio_read_chunk(int16_t *buf, int max_samples) {
+  int16_t *chunk = NULL;
+  if (xQueueReceive(rx_queue, &chunk, pdMS_TO_TICKS(200)) == pdTRUE && chunk) {
+    int samples = RX_CHUNK_SAMPLES;
+    if (samples > max_samples) samples = max_samples;
+    memcpy(buf, chunk, samples * sizeof(int16_t));
+    free(chunk);
+    return samples;
+  }
+  return 0;
+}
+
+bool audio_is_recording(void) { return rx_recording; }
 
 // --- Public API ---
 bool audio_init(void) {
@@ -248,3 +353,12 @@ void audio_set_volume(uint8_t vol) {
   es8311_write(ES8311_DAC_VOL, reg);
 }
 bool audio_is_playing(void) { return playing; }
+
+// Play TTS audio received from phone (blocking, single call)
+void audio_play_response(const int16_t *data, int samples, int sample_rate) {
+  if (!data || samples <= 0) return;
+  i2s_set_sample_rates(I2S_NUM_0, sample_rate);
+  size_t written = 0;
+  i2s_write(I2S_NUM_0, data, samples * sizeof(int16_t), &written, portMAX_DELAY);
+  i2s_set_sample_rates(I2S_NUM_0, 44100);  // restore default
+}

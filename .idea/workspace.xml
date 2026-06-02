@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="BackendCodeEditorMiscSettings">
-    <option name="/Default/Environment/Hierarchy/GeneratedFilesCacheKey/Timestamp/@EntryValue" value="3" type="long" />
+    <option name="/Default/Environment/Hierarchy/GeneratedFilesCacheKey/Timestamp/@EntryValue" value="6" type="long" />
     <option name="/Default/Housekeeping/FeatureSuggestion/FeatureSuggestionManager/DisabledSuggesters/=SwitchToGoToActionSuggester/@EntryIndexedValue" value="true" type="bool" />
   </component>
   <component name="CMakeProjectFlavorService">
@@ -23,14 +23,52 @@
   <component name="ChangeListManager">
     <list default="true" id="ce9b6d86-008e-4ba8-a609-619de4057cd3" name="更改" comment="点亮屏幕，显示文字">
       <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.pio/build/project.checksum" beforeDir="false" afterPath="$PROJECT_DIR$/.pio/build/project.checksum" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/DEVELOPMENT_PLAN.md" beforeDir="false" afterPath="$PROJECT_DIR$/DEVELOPMENT_PLAN.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/activity.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/activity.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/activity.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/activity.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/service/ble_srv.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/service/ble_srv.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/service/ble_srv.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/service/ble_srv.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/include/pin_config.h" beforeDir="false" afterPath="$PROJECT_DIR$/include/pin_config.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/platformio.ini" beforeDir="false" afterPath="$PROJECT_DIR$/platformio.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pin_config.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/pin_config.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/service/audio.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/service/audio.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/service/audio.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/service/audio.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/.metadata" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/analysis_options.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/app/build.gradle.kts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/app/src/debug/AndroidManifest.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/app/src/main/AndroidManifest.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/app/src/main/kotlin/com/example/watch_app/MainActivity.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/app/src/main/res/drawable-v21/launch_background.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/app/src/main/res/drawable/launch_background.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/app/src/main/res/mipmap-hdpi/ic_launcher.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/app/src/main/res/mipmap-mdpi/ic_launcher.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/app/src/main/res/values-night/styles.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/app/src/main/res/values/styles.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/app/src/profile/AndroidManifest.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/build.gradle.kts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/gradle.properties" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/gradle/wrapper/gradle-wrapper.properties" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/android/settings.gradle.kts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/ios/Flutter/Generated.xcconfig" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/ios/Flutter/ephemeral/flutter_lldb_helper.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/ios/Flutter/ephemeral/flutter_lldbinit" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/ios/Flutter/ephemeral/flutter_native_integration.env" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/ios/Flutter/flutter_export_environment.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/ios/Runner/GeneratedPluginRegistrant.h" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/ios/Runner/GeneratedPluginRegistrant.m" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/lib/main.dart" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/lib/models/watch_data.dart" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/lib/pages/home_page.dart" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/lib/services/ble_service.dart" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/pubspec.lock" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/pubspec.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/watch_app/test/widget_test.dart" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -41,7 +79,7 @@
     <option name="formatViaClangd" value="false" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="2321" />
+    <option name="cachedIndexableFilesCount" value="1510" />
     <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
   </component>
   <component name="ExecutionTargetManager" SELECTED_TARGET="esp32s3" />
@@ -277,6 +315,72 @@
       </texify>
       <method v="2" />
     </configuration>
+    <configuration default="true" type="LATEX_RUN_CONFIGURATION" factoryName="LaTeX configuration factory">
+      <texify>
+        <compiler>PDFLATEX</compiler>
+        <compiler-path />
+        <pdf-viewer>BUILT-IN-PDF-VIEWER</pdf-viewer>
+        <require-focus>true</require-focus>
+        <viewer-command />
+        <compiler-arguments />
+        <envs />
+        <expand-macros-in-environment-variables>false</expand-macros-in-environment-variables>
+        <before-run-command />
+        <main-file />
+        <output-path>{projectDir}/out</output-path>
+        <auxil-path>{projectDir}/auxil</auxil-path>
+        <working-directory>{mainFileParent}</working-directory>
+        <compile-twice>false</compile-twice>
+        <output-format>PDF</output-format>
+        <latex-distribution>MODULE_SDK</latex-distribution>
+        <has-been-run>false</has-been-run>
+        <bib-run-config>[]</bib-run-config>
+        <makeindex-run-config>[]</makeindex-run-config>
+      </texify>
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="LATEX_RUN_CONFIGURATION" factoryName="LaTeX configuration factory">
+      <texify>
+        <compiler>PDFLATEX</compiler>
+        <compiler-path />
+        <pdf-viewer>BUILT-IN-PDF-VIEWER</pdf-viewer>
+        <require-focus>true</require-focus>
+        <viewer-command />
+        <compiler-arguments />
+        <envs />
+        <expand-macros-in-environment-variables>false</expand-macros-in-environment-variables>
+        <before-run-command />
+        <main-file />
+        <output-path>{projectDir}/out</output-path>
+        <auxil-path>{projectDir}/auxil</auxil-path>
+        <working-directory>{mainFileParent}</working-directory>
+        <compile-twice>false</compile-twice>
+        <output-format>PDF</output-format>
+        <latex-distribution>MODULE_SDK</latex-distribution>
+        <has-been-run>false</has-been-run>
+        <bib-run-config>[]</bib-run-config>
+        <makeindex-run-config>[]</makeindex-run-config>
+      </texify>
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="MAKEINDEX_RUN_CONFIGURATION" factoryName="LaTeX configuration factory">
+      <texify-makeindex>
+        <program>MAKEINDEX</program>
+        <main-file />
+        <command-line-args />
+        <work-dir />
+      </texify-makeindex>
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="MAKEINDEX_RUN_CONFIGURATION" factoryName="LaTeX configuration factory">
+      <texify-makeindex>
+        <program>MAKEINDEX</program>
+        <main-file />
+        <command-line-args />
+        <work-dir />
+      </texify-makeindex>
+      <method v="2" />
+    </configuration>
     <configuration default="true" type="MAKEINDEX_RUN_CONFIGURATION" factoryName="LaTeX configuration factory">
       <texify-makeindex>
         <program>MAKEINDEX</program>
@@ -427,6 +531,16 @@
         <option name="PlatformioBuildBeforeRun" enabled="true" />
       </method>
     </configuration>
+    <configuration name="PlatformIO" type="platformio" factoryName="PlatformIO Debug" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SmartBracelet" TARGET_NAME="PlatformIO" CONFIG_NAME="PlatformIO">
+      <method v="2">
+        <option name="PlatformioBuildBeforeRun" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="PlatformIO" type="platformio" factoryName="PlatformIO Debug" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SmartBracelet" TARGET_NAME="PlatformIO" CONFIG_NAME="PlatformIO">
+      <method v="2">
+        <option name="PlatformioBuildBeforeRun" enabled="true" />
+      </method>
+    </configuration>
   </component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="默认任务">
@@ -447,7 +561,9 @@
       <workItem from="1779412421760" duration="8166000" />
       <workItem from="1779422120872" duration="170000" />
       <workItem from="1779707926281" duration="2686000" />
-      <workItem from="1779710654298" duration="3962000" />
+      <workItem from="1779710654298" duration="4752000" />
+      <workItem from="1779718701834" duration="223000" />
+      <workItem from="1779926554128" duration="2039000" />
     </task>
     <task id="LOCAL-00001" summary="修复配置文件，符合开发要求">
       <option name="closed" value="true" />

@@ -33,3 +33,9 @@
 // PA_EN via PCA9557 IO1 (see audio.cpp)
 #define PCA9557_ADDR 0x19
 #define ES8311_ADDR 0x18
+
+// INMP441 I2S Microphone (I2S_NUM_1)
+#define INMP441_WS   11
+#define INMP441_SCK  12
+#define INMP441_SD   48
+#define INMP441_LRS  47
