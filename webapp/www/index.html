@@ -181,6 +181,29 @@ body {
   background: var(--accent-dim);
 }
 
+/* Voice Chat */
+.voice-log-box {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: 10px;
+  margin-top: 10px;
+}
+.voice-log-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 4px;
+}
+.voice-log-text {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
 .no-bluetooth {
   background: var(--red-dim);
   color: var(--red);
@@ -577,6 +600,38 @@ textarea.input-field { resize: vertical; min-height: 60px; }
         <div id="notifyLog" class="notify-log" style="display:none">
           <div class="notify-log-title">History</div>
           <div id="notifyLogList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Voice Chat -->
+    <div class="card notify-card" id="voiceCard">
+      <div class="notify-header">
+        <div class="card-label" style="margin-bottom:0">&#x1F3A4; Voice Chat</div>
+        <span id="voiceArrow" class="notify-arrow">&#x25BC;</span>
+      </div>
+      <div id="voiceBody" class="notify-body">
+        <div class="input-group">
+          <div class="input-label">Watch IP:Port</div>
+          <input id="inputWatchWs" class="input-field" type="text" placeholder="ws://192.168.x.x:8765">
+        </div>
+        <button id="btnConnectWs" class="btn-send">Connect to Watch</button>
+        <div id="voiceStatus" class="notify-status" style="margin:8px 0">Disconnected</div>
+        <div class="input-group">
+          <div class="input-label">DeepSeek API Key</div>
+          <input id="inputApiKey" class="input-field" type="password" placeholder="sk-...">
+        </div>
+        <div id="voiceTransBox" class="voice-log-box" style="display:none">
+          <div class="voice-log-label">Transcription:</div>
+          <div id="voiceTransText" class="voice-log-text"></div>
+        </div>
+        <div id="voiceRespBox" class="voice-log-box" style="display:none">
+          <div class="voice-log-label">AI Response:</div>
+          <div id="voiceRespText" class="voice-log-text"></div>
+        </div>
+        <div id="voiceLog" class="notify-log" style="display:none">
+          <div class="notify-log-title">History</div>
+          <div id="voiceLogList"></div>
         </div>
       </div>
     </div>
@@ -1140,6 +1195,167 @@ function updateLog(id, st) {
   els.notifyLog.style.display = 'block';
 }
 function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// ═══════════════════════════════════════════════════════════════
+// Voice Chat — WebSocket client + Cloud API
+// ═══════════════════════════════════════════════════════════════
+let voiceWs = null;
+let voiceAudioChunks = [];
+let voiceMeta = {};
+const voiceLog = [];
+
+// Toggle voice chat panel
+$('voiceCard').addEventListener('click', e => {
+  if (e.target.closest('.input-field') || e.target.closest('.btn-send')) return;
+  $('voiceBody').classList.toggle('open');
+  $('voiceArrow').classList.toggle('open');
+});
+
+// Connect to watch WebSocket
+$('btnConnectWs').addEventListener('click', () => {
+  const url = $('inputWatchWs').value.trim();
+  if (!url) { setVoiceStatus('Enter watch IP:port', 'error'); return; }
+  setVoiceStatus('Connecting...', 'pending');
+  try {
+    voiceWs = new WebSocket(url);
+    voiceWs.binaryType = 'arraybuffer';
+    voiceWs.onopen = () => setVoiceStatus('Connected to watch', 'success');
+    voiceWs.onclose = () => { setVoiceStatus('Disconnected', 'error'); voiceWs = null; };
+    voiceWs.onerror = (e) => setVoiceStatus('Connection error', 'error');
+    voiceWs.onmessage = onVoiceWsMessage;
+  } catch (e) {
+    setVoiceStatus(`Error: ${e.message}`, 'error');
+  }
+});
+
+function setVoiceStatus(text, cls) {
+  $('voiceStatus').textContent = text;
+  $('voiceStatus').className = `notify-status ${cls || ''}`;
+}
+
+async function onVoiceWsMessage(event) {
+  if (typeof event.data === 'string') {
+    const msg = JSON.parse(event.data);
+    if (msg.type === 'start') {
+      voiceAudioChunks = [];
+      voiceMeta = msg;
+      setVoiceStatus('Recording...', 'pending');
+    } else if (msg.type === 'end') {
+      setVoiceStatus('Processing...', 'pending');
+      await processVoiceChat();
+    } else if (msg.type === 'response') {
+      // Direct response (if phone is the one calling APIs)
+    }
+  } else {
+    // Binary audio chunk
+    const view = new DataView(event.data);
+    const marker = view.getUint8(0);
+    if (marker === 0x01) {
+      const len = view.getUint16(1, true);
+      const samples = new Int16Array(event.data, 3, len / 2);
+      voiceAudioChunks.push(samples);
+    }
+  }
+}
+
+async function processVoiceChat() {
+  const apiKey = $('inputApiKey').value.trim();
+  if (!apiKey) { setVoiceStatus('Enter API key', 'error'); return; }
+  if (voiceAudioChunks.length === 0) { setVoiceStatus('No audio recorded', 'error'); return; }
+
+  try {
+    // 1. Assemble WAV
+    setVoiceStatus('Assembling audio...', 'pending');
+    const wavBlob = assembleWav(voiceAudioChunks, voiceMeta.sample_rate || 16000, 1, voiceMeta.bits || 16);
+
+    // 2. Transcribe via DeepSeek Whisper
+    setVoiceStatus('Transcribing...', 'pending');
+    const transcription = await sendToWhisper(wavBlob, apiKey);
+    $('voiceTransText').textContent = transcription;
+    $('voiceTransBox').style.display = 'block';
+
+    // 3. Get LLM response
+    setVoiceStatus('Thinking...', 'pending');
+    const response = await sendToLLM(transcription, apiKey);
+    $('voiceRespText').textContent = response;
+    $('voiceRespBox').style.display = 'block';
+
+    // 4. Send response back to watch
+    if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
+      voiceWs.send(JSON.stringify({ type: 'response', text: response, transcription }));
+    }
+
+    setVoiceStatus('Done', 'success');
+    updateVoiceLog(transcription, response);
+  } catch (e) {
+    console.error('Voice chat error:', e);
+    setVoiceStatus(`Error: ${e.message}`, 'error');
+  }
+}
+
+async function sendToWhisper(audioBlob, apiKey) {
+  const formData = new FormData();
+  formData.append('file', audioBlob, 'recording.wav');
+  formData.append('model', 'whisper-1');
+  formData.append('language', 'zh');
+  const resp = await fetch('https://api.deepseek.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${apiKey}` },
+    body: formData,
+  });
+  if (!resp.ok) throw new Error(`Whisper API ${resp.status}: ${await resp.text()}`);
+  const data = await resp.json();
+  return data.text;
+}
+
+async function sendToLLM(text, apiKey) {
+  const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [
+        { role: 'system', content: 'You are a helpful smartwatch assistant. Keep responses short (under 80 words). Reply in the same language as the user.' },
+        { role: 'user', content: text },
+      ],
+    }),
+  });
+  if (!resp.ok) throw new Error(`LLM API ${resp.status}: ${await resp.text()}`);
+  const data = await resp.json();
+  return data.choices[0].message.content;
+}
+
+function assembleWav(chunks, sampleRate, channels, bitsPerSample) {
+  let totalSamples = 0;
+  for (const c of chunks) totalSamples += c.length;
+  const bytesPerSample = bitsPerSample / 8;
+  const dataSize = totalSamples * bytesPerSample;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const v = new DataView(buffer);
+  const ws = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  ws(0, 'RIFF'); v.setUint32(4, 36 + dataSize, true); ws(8, 'WAVE');
+  ws(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, channels, true); v.setUint32(24, sampleRate, true);
+  v.setUint32(28, sampleRate * channels * bytesPerSample, true);
+  v.setUint16(32, channels * bytesPerSample, true); v.setUint16(34, bitsPerSample, true);
+  ws(36, 'data'); v.setUint32(40, dataSize, true);
+  let off = 44;
+  for (const c of chunks) { new Int16Array(buffer, off).set(c); off += c.length * 2; }
+  return new Blob([buffer], { type: 'audio/wav' });
+}
+
+function updateVoiceLog(trans, resp) {
+  const now = new Date().toLocaleTimeString();
+  voiceLog.unshift({ time: now, trans, resp });
+  if (voiceLog.length > 5) voiceLog.pop();
+  $('voiceLogList').innerHTML = voiceLog.map(i =>
+    `<div class="notify-log-item"><span class="log-msg">${escapeHtml(i.trans)}</span><span class="log-time">${i.time}</span></div>`
+  ).join('');
+  $('voiceLog').style.display = 'block';
+}
 </script>
 </body>
 </html>

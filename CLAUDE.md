@@ -12,7 +12,7 @@
 | RTC | PCF85063 (I2C 0x51) |
 | 连接 | USB CDC (COM9), VID:PID=303A:1001 |
 
-## 当前状态 (2026-05-21)
+## 当前状态 (2026-05-28)
 
 - ✅ 显示: Arduino_GFX + LVGL 8.4.0, 偏移 (0,20), RGB565 SWAP=0
 - ✅ 触控: CST816S 兼容驱动, IIC 15/14, 手势左/右滑动翻页
@@ -21,10 +21,10 @@
 - ✅ PMU: AXP2101 电量读取, 电源轨配置
 - ✅ UI: 数字表盘 + 模拟表盘 + 传感器页 + 通知页, 4页滑动导航
 - ✅ WiFi NTP: 自动连接 + NTP 校时
-- ✅ BLE: 通知推送 (nRF Connect -> 手表), 双向通讯
+- ✅ BLE: 通知推送 + DataService (步数/电量/活动上行), 双向通讯
 - ✅ 抬手亮屏: IMU 抬腕检测 + 背光自动管理 + 息屏定时 (10s)
 - ✅ Deep sleep: AXP2101 低功耗 + 触摸/定时唤醒 (30s 超时)
-- ❌ 手机 App
+- ✅ 手机 App: HTML + Web Bluetooth (Chrome 桌面) / Capacitor (Android APK)
 
 ## 关键配置
 
