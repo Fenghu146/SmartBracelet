@@ -28,4 +28,22 @@ typedef struct {
 
 extern NotificationData ble_notification;
 
+// Voice chat: callback when phone writes voice command
+typedef void (*voice_cmd_callback_t)(const char *cmd, const char *arg);
+void ble_srv_set_voice_cmd_callback(voice_cmd_callback_t cb);
+void ble_srv_send_voice_result(const char *transcription, const char *response);
+
+// OTA service — phone triggers firmware update via BLE
+void ble_srv_update_ota_state(uint8_t state, uint8_t progress);
+
+// Get the BLE server pointer (for HID service to attach to)
+void* ble_srv_get_server(void);
+
+// Do Not Disturb mode
+void ble_srv_set_dnd(bool enable);
+bool ble_srv_get_dnd(void);
+
+// IMU feature data for AI co-inference (12 floats: mean[6] + std[6])
+void ble_srv_update_imu_features(const float *features, int count);
+
 #endif

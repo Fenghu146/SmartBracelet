@@ -26,7 +26,7 @@
    HAL SETTINGS
  *====================*/
 #define LV_DISP_DEF_REFR_PERIOD 30
-#define LV_INDEV_DEF_READ_PERIOD 30
+#define LV_INDEV_DEF_READ_PERIOD 15
 #define LV_TICK_CUSTOM 1
 #if LV_TICK_CUSTOM
     #define LV_TICK_CUSTOM_INCLUDE "Arduino.h"
@@ -40,8 +40,8 @@
 #define LV_DRAW_COMPLEX 1
 #define LV_SHADOW_CACHE_SIZE 0
 #define LV_CIRCLE_CACHE_SIZE 4
-#define LV_LAYER_SIMPLE_BUF_SIZE (24 * 1024)
-#define LV_LAYER_SIMPLE_FALLBACK_BUF_SIZE (3 * 1024)
+#define LV_LAYER_SIMPLE_BUF_SIZE (12 * 1024)
+#define LV_LAYER_SIMPLE_FALLBACK_BUF_SIZE (2 * 1024)
 #define LV_IMG_CACHE_DEF_SIZE 0
 
 /*====================
@@ -55,11 +55,12 @@
 #define LV_FONT_MONTSERRAT_18 0
 #define LV_FONT_MONTSERRAT_20 0
 #define LV_FONT_MONTSERRAT_22 0
-#define LV_FONT_MONTSERRAT_24 1
+#define LV_FONT_MONTSERRAT_24 0
 #define LV_FONT_MONTSERRAT_26 0
 #define LV_FONT_MONTSERRAT_28 0
 #define LV_FONT_MONTSERRAT_30 0
 #define LV_FONT_MONTSERRAT_32 1
+#define LV_FONT_SIMSUN_16_CJK 1
 #define LV_FONT_DEFAULT &lv_font_montserrat_14
 #define LV_TXT_ENC LV_TXT_ENC_UTF8
 
@@ -70,16 +71,16 @@
 #define LV_USE_BAR        1
 #define LV_USE_BTN        1
 #define LV_USE_BTNMATRIX  1
-#define LV_USE_CANVAS     1
+#define LV_USE_CANVAS     0
 #define LV_USE_CHECKBOX   1
 #define LV_USE_DROPDOWN   1
 #define LV_USE_IMG        1
 #define LV_USE_LABEL      1
 #define LV_USE_LINE       1
-#define LV_USE_ROLLER     1
+#define LV_USE_ROLLER     0
 #define LV_USE_SLIDER     1
 #define LV_USE_SWITCH     1
-#define LV_USE_TABLE      1
+#define LV_USE_TABLE      0
 #define LV_USE_TEXTAREA   1
 
 /*==================

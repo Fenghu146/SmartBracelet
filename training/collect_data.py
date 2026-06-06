@@ -26,6 +26,7 @@ import serial.tools.list_ports
 LABEL_MAP = {
     '1': 'walk', '2': 'run', '3': 'wave', '4': 'idle',
     '5': 'flick', '6': 'circle', '7': 'sit', '8': 'fall',
+    '9': 'bike', '0': 'stairs',
 }
 
 

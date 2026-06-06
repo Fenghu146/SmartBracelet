@@ -20,7 +20,12 @@ static int last_pred = -1;
 static int stable_pred = -1;
 static int stable_count = 0;
 
+// Store latest features for BLE upload
+static float latest_features[12] = {0};
+static bool features_valid = false;
+
 int activity_get_current(void) { return stable_pred; }
+const float* activity_get_features(void) { return features_valid ? latest_features : NULL; }
 
 void activity_push_data(float ax, float ay, float az,
                         float gx, float gy, float gz) {
@@ -37,20 +42,16 @@ void activity_push_data(float ax, float ay, float az,
 static int activity_predict(void) {
   if (count < WINDOW) return -1;
 
-  // Build window in chronological order
-  float win[WINDOW][6];
-  for (int i = 0; i < WINDOW; i++) {
-    int idx = (head + i) % WINDOW;
-    for (int j = 0; j < 6; j++) win[i][j] = buf[idx][j];
-  }
-
+  // Compute 12 features directly from circular buffer (no temp copy needed)
   // 12 features: mean(6) + std(6)
   float features[12];
   for (int j = 0; j < 6; j++) {
     float sum = 0, sum2 = 0;
     for (int i = 0; i < WINDOW; i++) {
-      sum += win[i][j];
-      sum2 += win[i][j] * win[i][j];
+      int idx = (head + i) % WINDOW;
+      float v = buf[idx][j];
+      sum += v;
+      sum2 += v * v;
     }
     float m = sum / WINDOW;
     features[j] = m;       // mean
@@ -62,6 +63,10 @@ static int activity_predict(void) {
       "ax:%.2f ay:%.2f\nax_std:%.3f ay_std:%.3f",
       features[0], features[1], features[6], features[7]);
   }
+
+  // Save features for BLE upload
+  memcpy(latest_features, features, sizeof(latest_features));
+  features_valid = true;
 
   return rf_predict(features);
 }

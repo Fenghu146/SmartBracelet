@@ -2,7 +2,7 @@
 #include "pin_config.h"
 #include <lvgl.h>
 
-#define LV_DISP_BUF_SIZE (LCD_WIDTH * LCD_HEIGHT / 10)
+#define LV_DISP_BUF_SIZE (LCD_WIDTH * LCD_HEIGHT / 14)
 
 static lv_disp_drv_t disp_drv;
 static lv_disp_draw_buf_t disp_buf;

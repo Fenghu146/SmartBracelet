@@ -6,7 +6,8 @@
   "scripts": {
     "build": "npx cap sync android",
     "open": "npx cap open android",
-    "dev": "npx cap sync android && npx cap open android"
+    "dev": "npx cap sync android && npx cap open android",
+    "serve": "npx serve www"
   },
   "keywords": [],
   "author": "",
