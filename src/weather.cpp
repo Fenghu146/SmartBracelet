@@ -110,7 +110,7 @@ void weather_create(lv_obj_t *parent) {
   lv_label_set_text(status_label, "Tap to refresh");
   lv_obj_set_style_text_font(status_label, &lv_font_montserrat_10, 0);
   lv_obj_set_style_text_color(status_label, lv_color_hex(0x555566), 0);
-  lv_obj_align(status_label, LV_ALIGN_BOTTOM_MID, 0, -16);
+  lv_obj_align(status_label, LV_ALIGN_BOTTOM_MID, 0, -26);
 
   weather_fetch();
 }

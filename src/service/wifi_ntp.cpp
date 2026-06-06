@@ -8,6 +8,7 @@ static const char *wifi_pass = WIFI_PASS;
 static bool connected = false;
 static unsigned long last_attempt = 0;
 static bool wifi_enabled = false;
+static bool wifi_powered = true;  // WiFi radio on/off state
 
 extern void rtc_set_from_epoch(time_t epoch);
 
@@ -88,4 +89,33 @@ bool wifi_ntp_sync(void)
 
     USBSerial.println("NTP: timeout");
     return false;
+}
+
+void wifi_power_off(void) {
+    if (!wifi_powered) return;
+    wifi_powered = false;
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
+    connected = false;
+    USBSerial.println("WiFi: radio off (save power)");
+}
+
+void wifi_power_on(void) {
+    if (wifi_powered) return;
+    wifi_powered = true;
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect();
+    delay(100);
+    WiFi.begin(wifi_ssid, wifi_pass);
+    last_attempt = millis();
+    USBSerial.printf("WiFi: radio on, connecting to %s...\n", wifi_ssid);
+}
+
+bool wifi_is_powered(void) {
+    return wifi_powered;
+}
+
+int wifi_get_rssi(void) {
+    if (!wifi_is_connected()) return 0;
+    return WiFi.RSSI();
 }

@@ -14,4 +14,12 @@ bool wifi_is_connected(void);
 void wifi_ntp_set_creds(const char *ssid, const char *pass);
 void wifi_ntp_loop(void);
 
+// Power management: turn WiFi on/off to save battery
+void wifi_power_off(void);
+void wifi_power_on(void);
+bool wifi_is_powered(void);
+
+// Get current WiFi mode for display
+int wifi_get_rssi(void);
+
 #endif

@@ -92,15 +92,15 @@ void player_create(lv_obj_t *parent) {
   tf_label = lv_label_create(parent);
   lv_obj_set_style_text_font(tf_label, &lv_font_montserrat_10, 0);
   lv_obj_set_style_text_color(tf_label, lv_color_hex(0x555566), 0);
-  lv_obj_align(tf_label, LV_ALIGN_TOP_LEFT, 8, 32);
+  lv_obj_align(tf_label, LV_ALIGN_TOP_LEFT, 16, 32);
 
   // Selected file
   file_label = lv_label_create(parent);
   lv_label_set_text(file_label, "Scanning...");
   lv_obj_set_style_text_font(file_label, &lv_font_montserrat_14, 0);
   lv_obj_set_style_text_color(file_label, lv_color_hex(0xffffff), 0);
-  lv_obj_align(file_label, LV_ALIGN_LEFT_MID, 8, -20);
-  lv_obj_set_width(file_label, 220);
+  lv_obj_align(file_label, LV_ALIGN_LEFT_MID, 16, -20);
+  lv_obj_set_width(file_label, 208);
 
   // Status
   status_label = lv_label_create(parent);
@@ -111,8 +111,8 @@ void player_create(lv_obj_t *parent) {
 
   // Play/Stop button
   play_btn = lv_btn_create(parent);
-  lv_obj_set_size(play_btn, 80, 50);
-  lv_obj_align(play_btn, LV_ALIGN_BOTTOM_MID, -60, -20);
+  lv_obj_set_size(play_btn, 84, 48);
+  lv_obj_align(play_btn, LV_ALIGN_BOTTOM_MID, -56, -50);
   lv_obj_set_style_bg_color(play_btn, lv_color_hex(0x00d4ff), 0);
   lv_obj_set_style_bg_color(play_btn, lv_color_hex(0x0099bb), LV_STATE_PRESSED);
   play_btn_lbl = lv_label_create(play_btn);
@@ -122,8 +122,8 @@ void player_create(lv_obj_t *parent) {
 
   // Next button
   lv_obj_t *next_btn = lv_btn_create(parent);
-  lv_obj_set_size(next_btn, 60, 50);
-  lv_obj_align(next_btn, LV_ALIGN_BOTTOM_MID, 30, -20);
+  lv_obj_set_size(next_btn, 64, 48);
+  lv_obj_align(next_btn, LV_ALIGN_BOTTOM_MID, 36, -50);
   lv_obj_set_style_bg_color(next_btn, lv_color_hex(0x444466), 0);
   lv_obj_set_style_bg_color(next_btn, lv_color_hex(0x333355), LV_STATE_PRESSED);
   lv_obj_t *next_lbl = lv_label_create(next_btn);

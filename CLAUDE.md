@@ -2,15 +2,15 @@
 
 ## 硬件
 
-| 项目 | 规格 |
-|------|------|
-| 主控 | ESP32-S3, 240MHz, 16MB Flash, 8MB OPI PSRAM |
-| 屏幕 | ST7789, 240×284, SPI (DC=4, CS=5, SCK=6, MOSI=7, RST=38, BL=40) |
-| 触控 | CST816D via CST816S 库 (IIC_SDA=15, IIC_SCL=14, RST=39, INT=13) |
-| PMU | AXP2101 (I2C 0x34) |
-| IMU | QMI8658 (I2C 0x6A) |
-| RTC | PCF85063 (I2C 0x51) |
-| 连接 | USB CDC (COM9), VID:PID=303A:1001 |
+| 项目  | 规格                                                              |
+| --- | --------------------------------------------------------------- |
+| 主控  | ESP32-S3, 240MHz, 16MB Flash, 8MB OPI PSRAM                     |
+| 屏幕  | ST7789, 240×284, SPI (DC=4, CS=5, SCK=6, MOSI=7, RST=38, BL=40) |
+| 触控  | CST816D via CST816S 库 (IIC_SDA=15, IIC_SCL=14, RST=39, INT=13)  |
+| PMU | AXP2101 (I2C 0x34)                                              |
+| IMU | QMI8658 (I2C 0x6A)                                              |
+| RTC | PCF85063 (I2C 0x51)                                             |
+| 连接  | USB CDC (COM9), VID:PID=303A:1001                               |
 
 ## 当前状态 (2026-05-28)
 
@@ -40,6 +40,7 @@
 ## 交接指令
 
 当我说"交接"时，你需要：
+
 1. 检查 `codegraph status`，确保索引是最新的（如果过期则 `codegraph sync`）
 2. 检查 git status，了解当前工作状态
 3. 更新 DEBUG_REPORT.md，追加最近的调试/开发记录
@@ -49,6 +50,7 @@
 ## 调试报告
 
 详细的故障排查记录在 `DEBUG_REPORT.md`，包含 8 次调试：
+
 - 白屏/启动循环修复
 - USB 插拔后 flash 损坏恢复
 - LVGL 集成

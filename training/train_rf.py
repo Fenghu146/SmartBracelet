@@ -18,7 +18,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from collections import Counter
 
-LABEL_NAMES = {1: 'walk', 2: 'run', 4: 'idle'}
+LABEL_NAMES = {1: 'walk', 2: 'run', 4: 'idle', 9: 'bike', 10: 'stairs'}
 WINDOW = 50       # 1 second @ 50Hz
 STRIDE = 25       # 50% overlap
 
@@ -86,8 +86,8 @@ def export_c_code(model, feature_names, class_names):
 
     # Inference function
     print("// Predict: returns class index, -1 if no tree votes")
-    print("static int rf_predict(const float features[12]) {")
-    print("  int votes[3] = {0};")
+    print(f"static int rf_predict(const float features[12]) {{")
+    print(f"  int votes[{n_classes}] = {{0}};")
     print(f"  int n_trees = {len(model.estimators_)};")
     print("  const RFNode* trees[] = {")
     for ti in range(len(model.estimators_)):
@@ -115,7 +115,7 @@ def export_c_code(model, feature_names, class_names):
     print("  }")
     print()
     print("  int best = 0;")
-    print("  for (int c = 1; c < 3; c++)")
+    print(f"  for (int c = 1; c < {n_classes}; c++)")
     print("    if (votes[c] > votes[best]) best = c;")
     print("  return best;")
     print("}")
@@ -148,7 +148,9 @@ def main():
                      'mean_gx', 'mean_gy', 'mean_gz',
                      'std_ax', 'std_ay', 'std_az',
                      'std_gx', 'std_gy', 'std_gz']
-    class_names = ['walk', 'run', 'idle']
+    # Build class names dynamically from present labels
+    present_labels = sorted(set(y))
+    class_names = [LABEL_NAMES.get(l, f'class_{l}') for l in present_labels]
 
     export_c_code(model, feature_names, class_names)
 

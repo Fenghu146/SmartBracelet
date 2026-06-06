@@ -140,8 +140,8 @@ void stopwatch_create(lv_obj_t *parent) {
 
   // Action button (Start/Stop)
   action_btn = lv_btn_create(parent);
-  lv_obj_set_size(action_btn, 70, 40);
-  lv_obj_align(action_btn, LV_ALIGN_BOTTOM_MID, -80, -40);
+  lv_obj_set_size(action_btn, 70, 44);
+  lv_obj_align(action_btn, LV_ALIGN_BOTTOM_MID, -76, -50);
   lv_obj_set_style_bg_color(action_btn, lv_color_hex(0x00d4ff), 0);
   lv_obj_set_style_bg_color(action_btn, lv_color_hex(0x0099bb), LV_STATE_PRESSED);
   action_btn_label = lv_label_create(action_btn);
@@ -151,8 +151,8 @@ void stopwatch_create(lv_obj_t *parent) {
 
   // Reset button
   reset_btn = lv_btn_create(parent);
-  lv_obj_set_size(reset_btn, 70, 40);
-  lv_obj_align(reset_btn, LV_ALIGN_BOTTOM_MID, 0, -40);
+  lv_obj_set_size(reset_btn, 70, 44);
+  lv_obj_align(reset_btn, LV_ALIGN_BOTTOM_MID, 0, -50);
   lv_obj_set_style_bg_color(reset_btn, lv_color_hex(0x444466), 0);
   lv_obj_set_style_bg_color(reset_btn, lv_color_hex(0x333355), LV_STATE_PRESSED);
   lv_obj_t *reset_lbl = lv_label_create(reset_btn);
@@ -162,8 +162,8 @@ void stopwatch_create(lv_obj_t *parent) {
 
   // Mode switch button
   mode_btn = lv_btn_create(parent);
-  lv_obj_set_size(mode_btn, 70, 40);
-  lv_obj_align(mode_btn, LV_ALIGN_BOTTOM_MID, 80, -40);
+  lv_obj_set_size(mode_btn, 70, 44);
+  lv_obj_align(mode_btn, LV_ALIGN_BOTTOM_MID, 76, -50);
   lv_obj_set_style_bg_color(mode_btn, lv_color_hex(0x555566), 0);
   lv_obj_set_style_bg_color(mode_btn, lv_color_hex(0x444477), LV_STATE_PRESSED);
   lv_obj_t *mode_lbl = lv_label_create(mode_btn);
@@ -173,8 +173,8 @@ void stopwatch_create(lv_obj_t *parent) {
 
   // Timer +10s button (hidden by default)
   timer_add_btn = lv_btn_create(parent);
-  lv_obj_set_size(timer_add_btn, 100, 30);
-  lv_obj_align(timer_add_btn, LV_ALIGN_BOTTOM_MID, 0, -90);
+  lv_obj_set_size(timer_add_btn, 100, 36);
+  lv_obj_align(timer_add_btn, LV_ALIGN_BOTTOM_MID, 0, -100);
   lv_obj_set_style_bg_color(timer_add_btn, lv_color_hex(0x664433), 0);
   lv_obj_set_style_bg_color(timer_add_btn, lv_color_hex(0x553322), LV_STATE_PRESSED);
   lv_obj_t *add_lbl = lv_label_create(timer_add_btn);
