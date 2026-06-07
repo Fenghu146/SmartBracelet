@@ -12,6 +12,7 @@
 #include "voice_chat_ui.h"
 #include "service/ble_hid.h"
 #include "service/ble_srv.h"
+#include "notif_history.h"
 #include <math.h>
 
 // LCD dimensions (from pin_config.h or lv_port_disp)
@@ -56,9 +57,8 @@ static bool analog_inited = false;
 static lv_obj_t *dial_marks[12];
 
 // ── Notification page objects ──
-static lv_obj_t *notif_title = nullptr;
-static lv_obj_t *notif_body = nullptr;
-static lv_obj_t *notif_app = nullptr;
+static lv_obj_t *notif_list = nullptr;
+static lv_obj_t *notif_empty_label = nullptr;
 
 static int last_batt = -1;
 static char time_str[12], date_str[32];
@@ -245,25 +245,29 @@ static void update_analog_hand(lv_obj_t *hand, lv_point_t pts[2],
 static void notif_page_create(lv_obj_t *parent) {
     lv_obj_set_style_bg_color(parent, lv_color_hex(0x0d0d1a), 0);
 
-    notif_app = lv_label_create(parent);
-    lv_label_set_text(notif_app, "No notifications");
-    lv_obj_set_style_text_font(notif_app, &lv_font_montserrat_10, 0);
-    lv_obj_set_style_text_color(notif_app, lv_color_hex(0x555566), 0);
-    lv_obj_align(notif_app, LV_ALIGN_TOP_LEFT, 16, 28);
+    // Title
+    lv_obj_t *title = lv_label_create(parent);
+    lv_label_set_text(title, "Notifications");
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(0x00d4ff), 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
 
-    notif_title = lv_label_create(parent);
-    lv_label_set_text(notif_title, "");
-    lv_obj_set_style_text_font(notif_title, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(notif_title, lv_color_hex(0xffffff), 0);
-    lv_obj_align(notif_title, LV_ALIGN_TOP_LEFT, 16, 44);
+    // Empty state label
+    notif_empty_label = lv_label_create(parent);
+    lv_label_set_text(notif_empty_label, "No notifications yet");
+    lv_obj_set_style_text_font(notif_empty_label, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(notif_empty_label, lv_color_hex(0x555566), 0);
+    lv_obj_center(notif_empty_label);
 
-    notif_body = lv_label_create(parent);
-    lv_label_set_text(notif_body, "");
-    lv_obj_set_style_text_font(notif_body, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(notif_body, lv_color_hex(0xcccccc), 0);
-    lv_obj_align(notif_body, LV_ALIGN_TOP_LEFT, 16, 66);
-    lv_label_set_long_mode(notif_body, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(notif_body, LCD_WIDTH - 32);
+    // Scrollable list container
+    notif_list = lv_obj_create(parent);
+    lv_obj_remove_style_all(notif_list);
+    lv_obj_set_size(notif_list, LCD_WIDTH - 16, LCD_HEIGHT - 48);
+    lv_obj_align(notif_list, LV_ALIGN_TOP_MID, 0, 28);
+    lv_obj_set_flex_flow(notif_list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(notif_list, 4, 0);
+    lv_obj_set_scroll_dir(notif_list, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(notif_list, LV_SCROLLBAR_MODE_AUTO);
 }
 
 // ── Music control page ──
@@ -464,10 +468,51 @@ void ui_update_sensor_page(const ui_telemetry_t *t) {
 }
 
 void ui_update_notif_page(void) {
-    extern NotificationData ble_notification;
-    if (strlen(ble_notification.app_id) > 0) {
-        lv_label_set_text(notif_app, ble_notification.app_id);
-        lv_label_set_text(notif_title, ble_notification.title);
-        lv_label_set_text(notif_body, ble_notification.body);
+    // Clear existing list items
+    lv_obj_clean(notif_list);
+
+    int cnt = notif_history_count();
+    if (cnt == 0) {
+        lv_obj_clear_flag(notif_empty_label, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    lv_obj_add_flag(notif_empty_label, LV_OBJ_FLAG_HIDDEN);
+
+    for (int i = 0; i < cnt; i++) {
+        const notif_entry_t *e = notif_history_get(i);
+        if (!e) break;
+
+        // Create a card-like container for each notification
+        lv_obj_t *card = lv_obj_create(notif_list);
+        lv_obj_remove_style_all(card);
+        lv_obj_set_size(card, LV_PCT(100), LV_SIZE_CONTENT);
+        lv_obj_set_style_bg_color(card, lv_color_hex(0x1a1a2e), 0);
+        lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+        lv_obj_set_style_radius(card, 8, 0);
+        lv_obj_set_style_pad_all(card, 8, 0);
+
+        // Time + App header
+        char hdr[40];
+        snprintf(hdr, sizeof(hdr), "%02d:%02d  %s", e->hour, e->minute, e->app);
+        lv_obj_t *h = lv_label_create(card);
+        lv_label_set_text(h, hdr);
+        lv_obj_set_style_text_font(h, &lv_font_montserrat_10, 0);
+        lv_obj_set_style_text_color(h, lv_color_hex(0x555566), 0);
+
+        // Title
+        lv_obj_t *t = lv_label_create(card);
+        lv_label_set_text(t, e->title);
+        lv_obj_set_style_text_font(t, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(t, lv_color_hex(0xffffff), 0);
+
+        // Body (truncated)
+        if (e->body[0]) {
+            lv_obj_t *b = lv_label_create(card);
+            lv_label_set_text(b, e->body);
+            lv_obj_set_style_text_font(b, &lv_font_montserrat_10, 0);
+            lv_obj_set_style_text_color(b, lv_color_hex(0x888899), 0);
+            lv_label_set_long_mode(b, LV_LABEL_LONG_DOT);
+            lv_obj_set_width(b, LV_PCT(100));
+        }
     }
 }

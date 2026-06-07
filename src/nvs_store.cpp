@@ -110,3 +110,46 @@ bool nvs_check_daily_reset(int current_day) {
     }
     return false;
 }
+
+// ── Crash recovery ──
+void nvs_set_crash_page(int page) {
+    prefs.putInt("crash_page", page);
+}
+
+int nvs_get_crash_page(void) {
+    return prefs.getInt("crash_page", 0);
+}
+
+void nvs_set_crash_steps(int steps) {
+    prefs.putInt("crash_steps", steps);
+}
+
+int nvs_get_crash_steps(void) {
+    return prefs.getInt("crash_steps", 0);
+}
+
+// ── Watch face ──
+void nvs_set_watch_face(int face) {
+    prefs.putInt("watch_face", face);
+}
+
+int nvs_get_watch_face(void) {
+    return prefs.getInt("watch_face", 0);
+}
+
+// ── Battery health ──
+void nvs_set_batt_cycles(int cycles) {
+    prefs.putInt("batt_cycles", cycles);
+}
+
+int nvs_get_batt_cycles(void) {
+    return prefs.getInt("batt_cycles", 0);
+}
+
+void nvs_set_batt_full_mv(uint16_t mv) {
+    prefs.putUShort("batt_full_mv", mv);
+}
+
+uint16_t nvs_get_batt_full_mv(void) {
+    return prefs.getUShort("batt_full_mv", 4200);
+}
