@@ -183,6 +183,8 @@ function showConnectScreen() {
 function showDashboard() {
   els.connectScreen.classList.add('hidden');
   els.dashboard.classList.add('active');
+  // Init charts when dashboard first shows
+  if (typeof initCharts === 'function') setTimeout(initCharts, 100);
 }
 
 // ── Render ──
@@ -215,6 +217,10 @@ function render() {
   if (watchData.lastUpdate) els.lastUpdate.textContent = `Last update: ${watchData.lastUpdate.toLocaleTimeString()}`;
   updateDebug();
   els.btnSend.disabled = !ble.isConnected;
+  // Update charts with new data
+  if (typeof updateCharts === 'function') {
+    updateCharts(watchData.steps, watchData.batteryPercent, watchData.activity);
+  }
 }
 function flashElement(el) { el.classList.remove('value-changed'); void el.offsetWidth; el.classList.add('value-changed'); }
 function updateDebug() {
@@ -231,6 +237,27 @@ els.notifyCard.addEventListener('click', e => {
   if (e.target.closest('.input-field') || e.target.closest('.btn-send')) return;
   els.notifyBody.classList.toggle('open'); els.notifyArrow.classList.toggle('open');
 });
+
+// ── History Panel ──
+const historyCard = $('historyCard');
+if (historyCard) {
+  historyCard.addEventListener('click', e => {
+    if (e.target.closest('canvas')) return;
+    $('historyBody').classList.toggle('open');
+    $('historyArrow').classList.toggle('open');
+  });
+}
+
+// ── OTA Panel ──
+const otaCard = $('otaCard');
+if (otaCard) {
+  otaCard.addEventListener('click', e => {
+    if (e.target.closest('.input-field') || e.target.closest('.btn-send')) return;
+    $('otaBody').classList.toggle('open');
+    $('otaArrow').classList.toggle('open');
+  });
+}
+
 els.debugToggle.addEventListener('click', () => { els.debugBody.classList.toggle('open'); els.debugArrow.classList.toggle('open'); });
 els.btnSend.addEventListener('click', async () => {
   const appId = els.inputAppId.value.trim(), title = els.inputTitle.value.trim(), body = els.inputBody.value.trim();
@@ -258,3 +285,4 @@ function escapeHtml(s) { const d = document.createElement('div'); d.textContent 
 
 // ── Init ──
 initChat();
+if (typeof initOTA === 'function') initOTA();

@@ -29,6 +29,15 @@ const char* ota_get_error(void);
 // Check if OTA restart is pending (call from main loop)
 bool ota_check_restart(void);
 
+// BLE OTA: start receiving firmware over BLE
+bool ota_start_ble(uint32_t total_size);
+
+// BLE OTA: write a chunk of firmware data
+bool ota_write_chunk_ble(const uint8_t *data, size_t len);
+
+// BLE OTA: finalize and verify firmware
+bool ota_end_ble(void);
+
 // Firmware version string (embedded at build time)
 #define FIRMWARE_VERSION "1.0.0"
 

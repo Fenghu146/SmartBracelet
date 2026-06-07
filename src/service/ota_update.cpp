@@ -206,3 +206,70 @@ bool ota_check_restart(void) {
     }
     return false;
 }
+
+// ── BLE OTA ──
+
+static uint32_t ble_ota_total = 0;
+static uint32_t ble_ota_written = 0;
+
+bool ota_start_ble(uint32_t total_size) {
+    if (ota_state == OTA_DOWNLOADING || ota_state == OTA_WRITING) {
+        strncpy(ota_error, "OTA already in progress", sizeof(ota_error) - 1);
+        return false;
+    }
+
+    ble_ota_total = total_size;
+    ble_ota_written = 0;
+    ota_progress = 0;
+    ota_error[0] = '\0';
+
+    LOG_INFO("BLE OTA: starting, size=%u bytes", total_size);
+
+    if (!Update.begin(total_size)) {
+        snprintf(ota_error, sizeof(ota_error), "Not enough space: %u", total_size);
+        ota_state = OTA_ERROR;
+        LOG_ERR("BLE OTA: %s", ota_error);
+        return false;
+    }
+
+    ota_state = OTA_WRITING;
+    return true;
+}
+
+bool ota_write_chunk_ble(const uint8_t *data, size_t len) {
+    if (ota_state != OTA_WRITING) return false;
+
+    size_t written = Update.write((uint8_t *)data, len);
+    if (written != len) {
+        snprintf(ota_error, sizeof(ota_error), "Write error: %d of %d", written, len);
+        ota_state = OTA_ERROR;
+        Update.abort();
+        LOG_ERR("BLE OTA: %s", ota_error);
+        return false;
+    }
+
+    ble_ota_written += written;
+    if (ble_ota_total > 0) {
+        ota_progress = (ble_ota_written * 100) / ble_ota_total;
+    }
+    return true;
+}
+
+bool ota_end_ble(void) {
+    if (ota_state != OTA_WRITING) return false;
+
+    ota_state = OTA_VERIFYING;
+    if (Update.end(true)) {
+        ota_progress = 100;
+        ota_state = OTA_SUCCESS;
+        LOG_INFO("BLE OTA: success! %u bytes. Reboot in 3s...", ble_ota_written);
+        ota_restart_pending = true;
+        ota_restart_time = millis() + 3000;
+        return true;
+    } else {
+        snprintf(ota_error, sizeof(ota_error), "Verify failed: error %d", Update.getError());
+        ota_state = OTA_ERROR;
+        LOG_ERR("BLE OTA: %s", ota_error);
+        return false;
+    }
+}

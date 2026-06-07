@@ -15,6 +15,7 @@
 static SensorQMI8658 *sensor_imu = nullptr;
 static SemaphoreHandle_t data_mutex = nullptr;
 static TaskHandle_t sensor_task_handle = nullptr;
+static volatile TickType_t current_period = pdMS_TO_TICKS(8);  // ~125Hz default
 
 imu_data_t acc, gyr;
 
@@ -29,7 +30,6 @@ void sensor_data_unlock(void) {
 static void sensor_reading_task(void *param) {
     LOG_INFO("Sensor task: started on core %d", xPortGetCoreID());
 
-    const TickType_t period = pdMS_TO_TICKS(8);  // ~125Hz
     TickType_t last_wake = xTaskGetTickCount();
 
     for (;;) {
@@ -53,7 +53,7 @@ static void sensor_reading_task(void *param) {
             motion_intensity_update(ax, ay, az);
         }
 
-        vTaskDelayUntil(&last_wake, period);
+        vTaskDelayUntil(&last_wake, current_period);
     }
 }
 
@@ -77,4 +77,15 @@ void sensor_task_start(SensorQMI8658 *imu_ptr) {
     );
 
     LOG_INFO("Sensor task: created on Core 0 at 125Hz");
+}
+
+void sensor_task_set_rate(int hz) {
+    if (hz <= 0) {
+        current_period = pdMS_TO_TICKS(1000);  // 1Hz when paused
+    } else if (hz >= 125) {
+        current_period = pdMS_TO_TICKS(8);     // 125Hz
+    } else {
+        current_period = pdMS_TO_TICKS(1000 / hz);
+    }
+    LOG_INFO("Sensor task: rate=%d Hz", hz);
 }

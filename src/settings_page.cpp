@@ -1,6 +1,9 @@
 // Settings page: step goal, brightness, DND, about
 #include "settings_page.h"
 #include "nvs_store.h"
+#include "backlight.h"
+#include "watch_faces.h"
+#include "batt_health.h"
 #include "service/ota_update.h"
 #include "service/ble_srv.h"
 #include "pin_config.h"
@@ -10,6 +13,8 @@ static lv_obj_t *goal_label = nullptr;
 static lv_obj_t *bright_label = nullptr;
 static lv_obj_t *dnd_label = nullptr;
 static lv_obj_t *version_label = nullptr;
+static lv_obj_t *face_label = nullptr;
+static lv_obj_t *batt_health_label = nullptr;
 
 static int step_goal = 8000;
 static int brightness = 100;
@@ -35,8 +40,7 @@ static void on_bright_minus(lv_event_t *e) {
     if (brightness < 10) brightness = 10;
     nvs_set_brightness(brightness);
     lv_label_set_text_fmt(bright_label, "Bright: %d%%", brightness);
-    // Apply brightness via PWM
-    // Note: simple on/off for now; full PWM would use ledcWrite
+    backlight_set_level((brightness * 255) / 100);
     LOG_INFO("Settings: brightness=%d%%", brightness);
 }
 
@@ -45,6 +49,7 @@ static void on_bright_plus(lv_event_t *e) {
     if (brightness > 100) brightness = 100;
     nvs_set_brightness(brightness);
     lv_label_set_text_fmt(bright_label, "Bright: %d%%", brightness);
+    backlight_set_level((brightness * 255) / 100);
     LOG_INFO("Settings: brightness=%d%%", brightness);
 }
 
@@ -56,6 +61,14 @@ static void on_dnd_toggle(lv_event_t *e) {
     lv_obj_set_style_text_color(dnd_label,
         dnd_on ? lv_color_hex(0xffaa00) : lv_color_hex(0x888899), 0);
     LOG_INFO("Settings: DND=%s", dnd_on ? "ON" : "OFF");
+}
+
+static void on_face_cycle(lv_event_t *e) {
+    int face = nvs_get_watch_face();
+    face = watch_face_next(face);
+    nvs_set_watch_face(face);
+    lv_label_set_text_fmt(face_label, "Face: %s", watch_face_name(face));
+    LOG_INFO("Settings: watch face=%s", watch_face_name(face));
 }
 
 // Helper: create a row with label and +/- buttons
@@ -153,6 +166,33 @@ lv_obj_t* settings_page_create(void) {
     lv_obj_center(lbl_dnd);
     lv_obj_add_event_cb(btn_dnd, on_dnd_toggle, LV_EVENT_CLICKED, NULL);
 
+    // Watch face selector row
+    face_label = lv_label_create(page);
+    int saved_face = nvs_get_watch_face();
+    lv_label_set_text_fmt(face_label, "Face: %s", watch_face_name(saved_face));
+    lv_obj_set_style_text_font(face_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(face_label, lv_color_hex(0xffffff), 0);
+    lv_obj_align(face_label, LV_ALIGN_LEFT_MID, 16, 80);
+
+    lv_obj_t *btn_face = lv_btn_create(page);
+    lv_obj_set_size(btn_face, 64, 36);
+    lv_obj_align(btn_face, LV_ALIGN_LEFT_MID, 136, 80);
+    lv_obj_set_style_bg_color(btn_face, lv_color_hex(0x1a1a2e), 0);
+    lv_obj_set_style_bg_opa(btn_face, LV_OPA_COVER, 0);
+    lv_obj_t *lbl_face = lv_label_create(btn_face);
+    lv_label_set_text(lbl_face, "Next");
+    lv_obj_set_style_text_font(lbl_face, &lv_font_montserrat_12, 0);
+    lv_obj_center(lbl_face);
+    lv_obj_add_event_cb(btn_face, on_face_cycle, LV_EVENT_CLICKED, NULL);
+
+    // Battery health info
+    batt_health_label = lv_label_create(page);
+    lv_label_set_text_fmt(batt_health_label, "Batt: %d%% (%d cyc)",
+        batt_health_get_percent(), batt_health_get_cycles());
+    lv_obj_set_style_text_font(batt_health_label, &lv_font_montserrat_10, 0);
+    lv_obj_set_style_text_color(batt_health_label, lv_color_hex(0x888899), 0);
+    lv_obj_align(batt_health_label, LV_ALIGN_BOTTOM_MID, 0, -40);
+
     // About section
     version_label = lv_label_create(page);
     lv_label_set_text_fmt(version_label, "FW: %s", FIRMWARE_VERSION);
@@ -169,6 +209,11 @@ void settings_page_update(void) {
         lv_label_set_text_fmt(goal_label, "Goal: %d", nvs_get_step_goal());
     if (bright_label)
         lv_label_set_text_fmt(bright_label, "Bright: %d%%", nvs_get_brightness());
+    if (face_label)
+        lv_label_set_text_fmt(face_label, "Face: %s", watch_face_name(nvs_get_watch_face()));
+    if (batt_health_label)
+        lv_label_set_text_fmt(batt_health_label, "Batt: %d%% (%d cyc)",
+            batt_health_get_percent(), batt_health_get_cycles());
     if (version_label)
         lv_label_set_text_fmt(version_label, "FW: %s", FIRMWARE_VERSION);
 }

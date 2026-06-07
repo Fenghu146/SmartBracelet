@@ -92,6 +92,31 @@ class NotifyCallback : public BLECharacteristicCallbacks
             return;
         }
 
+        // BLE OTA protocol: "ota_ble|<size>" to start, "ota_ble_end" to finish
+        if (val.rfind("ota_ble|", 0) == 0) {
+            uint32_t size = strtoul(val.c_str() + 8, nullptr, 10);
+            LOG_INFO("BLE OTA: start, size=%u", size);
+            if (ota_start_ble(size)) {
+                LOG_INFO("BLE OTA: ready for chunks");
+            }
+            return;
+        }
+        if (val.rfind("ota_ble_end", 0) == 0) {
+            LOG_INFO("BLE OTA: finalizing...");
+            if (ota_end_ble()) {
+                LOG_INFO("BLE OTA: success, reboot pending");
+            }
+            return;
+        }
+
+        // If OTA is in WRITING state, treat data as firmware chunk
+        if (ota_get_state() == OTA_WRITING) {
+            const uint8_t *data = (const uint8_t *)val.data();
+            size_t len = val.length();
+            ota_write_chunk_ble(data, len);
+            return;
+        }
+
         // DND command protocol: "dnd:1" or "dnd:0"
         if (val.rfind("dnd:", 0) == 0) {
             std::string dnd_val = val.substr(4);

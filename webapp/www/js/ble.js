@@ -265,4 +265,19 @@ class BleService {
   async readAll() { return isNative ? this.readAllCap() : this.readAllWeb(); }
   async sendNotification(a, t, b) { return isNative ? this.sendNotificationCap(a,t,b) : this.sendNotificationWeb(a,t,b); }
   disconnect() { isNative ? this.disconnectCap() : this.disconnectWeb(); }
+
+  // Write raw bytes to notify RX (for BLE OTA chunks)
+  async writeRaw(bytes) {
+    if (isNative) {
+      await CapacitorBLE.write({
+        deviceId: this.deviceId, service: UUID.NOTIFY_SERVICE,
+        characteristic: UUID.NOTIFY_RX_CHAR,
+        value: bytesToB64(bytes),
+      });
+    } else {
+      const ch = this.chars.notifyRx;
+      if (!ch) throw new Error('Notify RX not available');
+      await ch.writeValue(bytes);
+    }
+  }
 }

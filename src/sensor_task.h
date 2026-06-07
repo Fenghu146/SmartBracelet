@@ -19,4 +19,8 @@ void sensor_task_start(SensorQMI8658 *imu_ptr);
 void sensor_data_lock(void);
 void sensor_data_unlock(void);
 
+// Change sensor reading rate (Hz). Call to save power when screen is off.
+// Typical values: 125 (active), 25 (screen off), 0 (pause)
+void sensor_task_set_rate(int hz);
+
 #endif // SENSOR_TASK_H

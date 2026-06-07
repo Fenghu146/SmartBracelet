@@ -33,4 +33,20 @@ void nvs_set_wifi_pass(const char *pass);
 // Daily reset check: returns true if a new day has started
 bool nvs_check_daily_reset(int current_day);
 
+// Crash recovery: save/restore page state
+void nvs_set_crash_page(int page);
+int  nvs_get_crash_page(void);
+void nvs_set_crash_steps(int steps);
+int  nvs_get_crash_steps(void);
+
+// Watch face preference
+void nvs_set_watch_face(int face);
+int  nvs_get_watch_face(void);
+
+// Battery health
+void nvs_set_batt_cycles(int cycles);
+int  nvs_get_batt_cycles(void);
+void nvs_set_batt_full_mv(uint16_t mv);
+uint16_t nvs_get_batt_full_mv(void);
+
 #endif // NVS_STORE_H

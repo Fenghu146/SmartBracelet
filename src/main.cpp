@@ -34,8 +34,14 @@
 #include "ui_styles.h"
 #include "debug_log.h"
 #include "sensor_task.h"
+#include "backlight.h"
+#include "watch_faces.h"
+#include "notif_history.h"
+#include "batt_health.h"
+#include "quick_panel.h"
 #include <math.h>
 #include <esp_sleep.h>
+#include <esp_system.h>
 
 // ── Hardware globals ──
 Arduino_DataBus *bus = nullptr;
@@ -70,6 +76,10 @@ static const unsigned long DEEP_SLEEP_TIMEOUT_MS = 30000;
 // ── Activity state ──
 static int current_activity = -1;
 
+// ── Watch face ──
+static int current_face = 0;
+static lv_obj_t *sport_page = nullptr;
+
 // ── RTC helper for NTP sync ──
 void set_rtc_from_tm(struct tm *ti) {
     rtc.setDateTime(ti->tm_year + 1900, ti->tm_mon + 1, ti->tm_mday,
@@ -92,10 +102,59 @@ static bool batt_is_valid(void) {
     return (mv >= 500 && mv <= 5000);
 }
 
-// ── Backlight / screen ──
+// ── Backlight / screen (PWM) ──
+#define BL_PWM_CH    0
+#define BL_PWM_FREQ  5000
+#define BL_PWM_RES   8   // 0-255
+
+static int bl_current_level = 255;
+
+void backlight_init(void) {
+    ledcSetup(BL_PWM_CH, BL_PWM_FREQ, BL_PWM_RES);
+    ledcAttachPin(LCD_BL, BL_PWM_CH);
+    // Apply saved brightness
+    int pct = nvs_get_brightness();
+    bl_current_level = (pct * 255) / 100;
+    if (bl_current_level < 10) bl_current_level = 10;
+    ledcWrite(BL_PWM_CH, bl_current_level);
+}
+
+void backlight_set_level(int level) {
+    if (level < 0) level = 0;
+    if (level > 255) level = 255;
+    bl_current_level = level;
+    ledcWrite(BL_PWM_CH, level);
+}
+
+int backlight_get_level(void) {
+    return bl_current_level;
+}
+
+void backlight_on(void) {
+    int pct = nvs_get_brightness();
+    int level = (pct * 255) / 100;
+    if (level < 10) level = 10;
+    backlight_set_level(level);
+    screen_on = true;
+}
+
+void backlight_off(void) {
+    backlight_set_level(0);
+    screen_on = false;
+}
+
 static void set_backlight(bool on) {
-    digitalWrite(LCD_BL, on ? HIGH : LOW);
-    screen_on = on;
+    if (on) {
+        backlight_on();
+        // Restore full performance
+        sensor_task_set_rate(125);
+        setCpuFrequencyMhz(240);
+    } else {
+        backlight_off();
+        // Enter low power mode
+        setCpuFrequencyMhz(80);
+        sensor_task_set_rate(25);
+    }
 }
 
 static void reset_activity_timer(void) {
@@ -108,6 +167,7 @@ static void switch_page(int dir) {
     int next = current_page + dir;
     if (next < 0 || next >= NUM_PAGES) return;
     current_page = next;
+    nvs_set_crash_page(current_page);  // Save for crash recovery
     lv_scr_load_anim(pages[next],
         dir > 0 ? LV_SCR_LOAD_ANIM_MOVE_LEFT : LV_SCR_LOAD_ANIM_MOVE_RIGHT,
         200, 0, false);
@@ -118,7 +178,21 @@ static void handle_gesture(void) {
     if (g == SWIPE_LEFT) switch_page(1);
     else if (g == SWIPE_RIGHT) switch_page(-1);
     else if (g == SWIPE_UP) { set_backlight(true); reset_activity_timer(); }
-    else if (g == SWIPE_DOWN) { set_backlight(false); }
+    else if (g == SWIPE_DOWN) { if (quick_panel_is_visible()) quick_panel_hide(); else quick_panel_show(); }
+    else if (g == LONG_PRESS) {
+        // Cycle watch face
+        current_face = watch_face_next(current_face);
+        nvs_set_watch_face(current_face);
+        // Load the appropriate face as page 0
+        if (current_face == FACE_ANALOG) {
+            lv_scr_load(pages[1]);  // analog is page 1
+        } else if (current_face == FACE_SPORT) {
+            lv_scr_load(sport_page);
+        } else {
+            lv_scr_load(pages[0]);  // digital
+        }
+        LOG_INFO("Watch face: %s", watch_face_name(current_face));
+    }
 }
 
 // ── Build telemetry for UI ──
@@ -149,12 +223,11 @@ static void fill_telemetry(ui_telemetry_t *t) {
     t->sleep_deep_min = sleep_tracker_get_deep_minutes();
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════�?
 // Setup
-// ═══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════�?
 void setup() {
-    pinMode(LCD_BL, OUTPUT);
-    digitalWrite(LCD_BL, HIGH);
+    backlight_init();  // PWM backlight with saved brightness
     last_activity_time = millis();
 
     USBSerial.begin(115200);
@@ -190,6 +263,9 @@ void setup() {
     wrist_detect_init();
     motion_intensity_init();
     sleep_tracker_init();
+    notif_history_init();
+    batt_health_init();
+    quick_panel_init();
     wrist_detect_set_callback(reset_activity_timer);
 
     touch = new CST816S(TP_SDA, TP_SCL, TP_RST, TP_INT);
@@ -202,6 +278,14 @@ void setup() {
     ui_pages_init(pages, NUM_PAGES, touch);
     // Settings page (index 10)
     pages[10] = settings_page_create();
+
+    // Create sport face page (used when face=2)
+    sport_page = lv_obj_create(NULL);
+    sport_face_create(sport_page);
+
+    // Restore watch face preference
+    current_face = nvs_get_watch_face();
+    if (current_face >= FACE_COUNT) current_face = 0;
 
     if (rtc.init(Wire, IIC_SDA, IIC_SCL, PCF85063_SLAVE_ADDRESS)) {
         RTC_DateTime dt = rtc.getDateTime();
@@ -255,12 +339,35 @@ void setup() {
     step_counter_set(saved_steps);
     LOG_INFO("Restored %d steps from NVS", saved_steps);
 
+    // Crash recovery: check if last reset was due to panic
+    esp_reset_reason_t reset_reason = esp_reset_reason();
+    LOG_INFO("Reset reason: %d", reset_reason);
+    if (reset_reason == ESP_RST_PANIC || reset_reason == ESP_RST_WDT ||
+        reset_reason == ESP_RST_INT_WDT || reset_reason == ESP_RST_TASK_WDT) {
+        int crash_page = nvs_get_crash_page();
+        int crash_steps = nvs_get_crash_steps();
+        if (crash_page >= 0 && crash_page < NUM_PAGES) {
+            current_page = crash_page;
+            lv_scr_load(pages[crash_page]);
+            LOG_INFO("Crash recovery: restored page %d, steps %d", crash_page, crash_steps);
+        }
+        if (crash_steps > 0 && saved_steps == 0) {
+            step_counter_set(crash_steps);
+            LOG_INFO("Crash recovery: restored %d steps from crash state", crash_steps);
+        }
+    }
+
+    // Register shutdown handler for crash state saving
+    // Note: only async-signal-safe operations allowed in handler
+    // NVS writes use Preferences which is NOT async-safe,
+    // so we rely on periodic saves in loop() instead
+
     LOG_INFO("Ready");
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════�?
 // Main loop
-// ═══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════�?
 void loop() {
     lv_timer_handler();
     wifi_ntp_loop();
@@ -307,6 +414,12 @@ void loop() {
     // Handle BLE notifications
     if (ble_notification.has_new) {
         ble_notification.has_new = 0;
+
+        // Add to notification history
+        RTC_DateTime dt = rtc.getDateTime();
+        notif_history_add(ble_notification.app_id, ble_notification.title,
+                         ble_notification.body, dt.hour, dt.minute);
+
         if (ble_srv_get_dnd()) {
             LOG_INFO("Notify: [DND] [%s] %s",
                 ble_notification.app_id, ble_notification.title);
@@ -381,6 +494,15 @@ void loop() {
             if (current_page == 7) player_update();
             if (current_page == 8) voice_chat_page_update();
             if (current_page == 10) settings_page_update();
+            // Sport face update (when sport face is active as page 0)
+            if (current_face == FACE_SPORT && current_page == 0) {
+                sport_face_update(&telem);
+            }
+            // Quick panel update
+            if (quick_panel_is_visible()) {
+                quick_panel_update(telem.hour, telem.minute, telem.batt_percent,
+                                   telem.wifi_connected, ble_is_connected());
+            }
         } else {
             ui_update_watchface(&telem);
         }
@@ -402,12 +524,24 @@ void loop() {
             if (millis() - last_nvs_save > 60000) {
                 last_nvs_save = millis();
                 nvs_set_steps_today(step_counter_get());
+                // Also save crash recovery state
+                nvs_set_crash_page(current_page);
+                nvs_set_crash_steps(step_counter_get());
             }
         }
         if (batt_is_valid())
             ble_srv_update_batt_raw(read_batt_voltage_raw());
         else if (pmu.isVbusIn())
             ble_srv_update_batt_raw(0xFFFF);
+
+        // Battery health tracking
+        {
+            xpowers_chg_status_t cs = pmu.getChargerStatus();
+            bool charging = (cs == XPOWERS_AXP2101_CHG_CC_STATE ||
+                           cs == XPOWERS_AXP2101_CHG_PRE_STATE ||
+                           cs == XPOWERS_AXP2101_CHG_TRI_STATE);
+            batt_health_update(charging, read_batt_voltage_raw());
+        }
 
         // Push IMU features for AI co-inference (every 5s)
         {
