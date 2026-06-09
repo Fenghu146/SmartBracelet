@@ -48,8 +48,8 @@ static bool pca9557_init(void) {
 #define ES8311_CLK6     0x06  // BCLK config
 #define ES8311_CLK7     0x07  // LRCK divider HI + tri-state
 #define ES8311_CLK8     0x08  // LRCK divider LO
-#define ES8311_SDP_IN   0x09  // serial data port input (I2S format)
-#define ES8311_SDP_OUT  0x0A  // serial data port output
+#define ES8311_SDP_IN   0x09  // USBSerial data port input (I2S format)
+#define ES8311_SDP_OUT  0x0A  // USBSerial data port output
 #define ES8311_PWR_A    0x0B  // power up sequence A
 #define ES8311_PWR_B    0x0C  // power up sequence B
 #define ES8311_PWR_C    0x0D  // power up sequence C
@@ -109,7 +109,7 @@ static bool es8311_init(void) {
   es8311_write(ES8311_VOLT, 0x7F);  // internal voltage
 
   // 6. Output routing: line out (not headphone amp)
-  es8311_write(ES8311_OUT, 0x00);   // HPSW=0 â†’ line output mode
+  es8311_write(ES8311_OUT, 0x00);   // HPSW=0 â†?line output mode
 
   // 7. Start state machine
   es8311_write(ES8311_RESET, 0x80); // CSM_ON=1 (slave mode)

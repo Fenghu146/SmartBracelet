@@ -185,6 +185,27 @@ function showDashboard() {
   els.dashboard.classList.add('active');
   // Init charts when dashboard first shows
   if (typeof initCharts === 'function') setTimeout(initCharts, 100);
+  // Send GPS location to watch for weather
+  sendLocationToWatch();
+}
+
+// Send phone GPS location to watch via BLE
+function sendLocationToWatch() {
+  if (!navigator.geolocation || !ble.isConnected) return;
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      try {
+        const lat = pos.coords.latitude.toFixed(4);
+        const lon = pos.coords.longitude.toFixed(4);
+        await ble.sendLocation(lat, lon);
+        console.log(`Location sent: ${lat}, ${lon}`);
+      } catch (e) {
+        console.warn('Failed to send location:', e.message);
+      }
+    },
+    (err) => { console.warn('Geolocation error:', err.message); },
+    { timeout: 10000, maximumAge: 300000 }  // 5 min cache
+  );
 }
 
 // ── Render ──

@@ -43,7 +43,7 @@
 #include <esp_sleep.h>
 #include <esp_system.h>
 
-// ── Hardware globals ──
+// 鈹€鈹€ Hardware globals 鈹€鈹€
 Arduino_DataBus *bus = nullptr;
 Arduino_GFX *gfx = nullptr;
 CST816S *touch = nullptr;
@@ -53,41 +53,41 @@ XPowersPMU pmu;
 
 // acc, gyr are now managed by sensor_task (mutex-protected)
 
-// ── Page management ──
+// 鈹€鈹€ Page management 鈹€鈹€
 static int current_page = 0;
 static const int NUM_PAGES = 11;
 static lv_obj_t *pages[11];
 
-// ── NTP sync ──
+// 鈹€鈹€ NTP sync 鈹€鈹€
 static unsigned long last_ntp_attempt = 0;
 static bool ntp_synced = false;
 
-// ── WiFi power management ──
+// 鈹€鈹€ WiFi power management 鈹€鈹€
 static unsigned long wifi_off_time = 0;
 static const unsigned long WIFI_ON_INTERVAL_MS = 600000;  // 10 min
 static bool wifi_was_turned_off = false;
 
-// ── Screen timeout ──
+// 鈹€鈹€ Screen timeout 鈹€鈹€
 static unsigned long last_activity_time = 0;
 static bool screen_on = true;
 static const unsigned long DISPLAY_TIMEOUT_MS = 10000;
 static const unsigned long DEEP_SLEEP_TIMEOUT_MS = 30000;
 
-// ── Activity state ──
+// 鈹€鈹€ Activity state 鈹€鈹€
 static int current_activity = -1;
 
-// ── Watch face ──
+// 鈹€鈹€ Watch face 鈹€鈹€
 static int current_face = 0;
 static lv_obj_t *sport_page = nullptr;
 
-// ── RTC helper for NTP sync ──
+// 鈹€鈹€ RTC helper for NTP sync 鈹€鈹€
 void set_rtc_from_tm(struct tm *ti) {
     rtc.setDateTime(ti->tm_year + 1900, ti->tm_mon + 1, ti->tm_mday,
         ti->tm_hour, ti->tm_min, ti->tm_sec);
     LOG_INFO("RTC: time updated from NTP");
 }
 
-// ── Battery helpers ──
+// 鈹€鈹€ Battery helpers 鈹€鈹€
 static uint16_t read_batt_voltage_raw(void) {
     int h5 = pmu.readRegister(0x34);
     int l8 = pmu.readRegister(0x35);
@@ -102,7 +102,7 @@ static bool batt_is_valid(void) {
     return (mv >= 500 && mv <= 5000);
 }
 
-// ── Backlight / screen (PWM) ──
+// 鈹€鈹€ Backlight / screen (PWM) 鈹€鈹€
 #define BL_PWM_CH    0
 #define BL_PWM_FREQ  5000
 #define BL_PWM_RES   8   // 0-255
@@ -162,7 +162,7 @@ static void reset_activity_timer(void) {
     if (!screen_on) set_backlight(true);
 }
 
-// ── Page switching ──
+// 鈹€鈹€ Page switching 鈹€鈹€
 static void switch_page(int dir) {
     int next = current_page + dir;
     if (next < 0 || next >= NUM_PAGES) return;
@@ -195,7 +195,7 @@ static void handle_gesture(void) {
     }
 }
 
-// ── Build telemetry for UI ──
+// 鈹€鈹€ Build telemetry for UI 鈹€鈹€
 static void fill_telemetry(ui_telemetry_t *t) {
     RTC_DateTime dt = rtc.getDateTime();
     t->hour = dt.hour; t->minute = dt.minute; t->second = dt.second;
@@ -223,23 +223,35 @@ static void fill_telemetry(ui_telemetry_t *t) {
     t->sleep_deep_min = sleep_tracker_get_deep_minutes();
 }
 
-// ══════════════════════════════════════════════════════════════�?
+// 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲锟?
 // Setup
-// ══════════════════════════════════════════════════════════════�?
+// 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲锟?
 void setup() {
     backlight_init();  // PWM backlight with saved brightness
     last_activity_time = millis();
 
     USBSerial.begin(115200);
-    unsigned long start = millis();
-    while (!USBSerial && millis() - start < 3000) delay(10);
+    // Don't wait for USBSerial - just try to connect
+    delay(500);
     LOG_INFO("Booting... Firmware: %s", FIRMWARE_VERSION);
 
     Wire.begin(IIC_SDA, IIC_SCL);
 
     bus = new Arduino_ESP32SPI(LCD_DC, LCD_CS, LCD_SCK, LCD_MOSI, GFX_NOT_DEFINED);
     gfx = new Arduino_ST7789(bus, LCD_RST, 0, true, LCD_WIDTH, LCD_HEIGHT, 0, 20, 0, 0);
-    if (!gfx->begin()) { while (true) delay(100); }
+    if (!gfx->begin()) {
+        // Blink backlight to signal display init failure
+        for (int i = 0; i < 10; i++) {
+            digitalWrite(LCD_BL, (i % 2) ? HIGH : LOW);
+            delay(200);
+        }
+        digitalWrite(LCD_BL, HIGH);
+        while (true) delay(100);
+    }
+
+    // Quick display test - fill screen with blue to confirm display works
+    gfx->fillScreen(0x001F);  // Blue
+    delay(100);
 
     // Clear physical rows 0-19 and 304-319 (outside LVGL space)
     bus->beginWrite();
@@ -330,7 +342,8 @@ void setup() {
     sensor_task_start(&imu);
 
     ble_srv_init();
-    ble_hid_init(ble_srv_get_server());
+    // ble_hid_init disabled - HID service uses too many GATT handles
+    // ble_hid_init(ble_srv_get_server());
     wifi_ntp_init();
 
     // NVS: restore step count and settings
@@ -365,9 +378,9 @@ void setup() {
     LOG_INFO("Ready");
 }
 
-// ══════════════════════════════════════════════════════════════�?
+// 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲锟?
 // Main loop
-// ══════════════════════════════════════════════════════════════�?
+// 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲锟?
 void loop() {
     lv_timer_handler();
     wifi_ntp_loop();
@@ -432,7 +445,7 @@ void loop() {
         ble_srv_send(reply);
     }
 
-    // Serial-to-BLE bridge + OTA command
+    // USBSerial-to-BLE bridge + OTA command
     static char serial_buf[256];
     static int serial_len = 0;
     while (USBSerial.available() && serial_len < 255) {

@@ -1,4 +1,4 @@
-// Voice chat service â€” receives commands from phone via BLE
+// Voice chat service â€?receives commands from phone via BLE
 // Phone records audio, calls cloud APIs, sends results back
 
 #include "voice_chat.h"

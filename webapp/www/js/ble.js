@@ -280,4 +280,11 @@ class BleService {
       await ch.writeValue(bytes);
     }
   }
+
+  // Send GPS location to watch for weather
+  async sendLocation(lat, lon) {
+    const cmd = `loc:${lat}|${lon}`;
+    await this.writeRaw(new TextEncoder().encode(cmd));
+    console.log(`[BLE] Sent location: ${lat}, ${lon}`);
+  }
 }

@@ -1,4 +1,4 @@
-// Voice Chat LVGL page â€” displays conversation from phone
+// Voice Chat LVGL page â€?displays conversation from phone
 // Phone records audio + calls cloud APIs, watch just shows results
 
 #include "voice_chat_ui.h"

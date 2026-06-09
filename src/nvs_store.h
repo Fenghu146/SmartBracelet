@@ -49,4 +49,11 @@ int  nvs_get_batt_cycles(void);
 void nvs_set_batt_full_mv(uint16_t mv);
 uint16_t nvs_get_batt_full_mv(void);
 
+// Weather location (sent by phone via BLE)
+void nvs_set_weather_lat(const char *lat);  // e.g. "39.9042"
+void nvs_get_weather_lat(char *buf, int maxlen);
+void nvs_set_weather_lon(const char *lon);  // e.g. "116.4074"
+void nvs_get_weather_lon(char *buf, int maxlen);
+bool nvs_has_weather_location(void);
+
 #endif // NVS_STORE_H
