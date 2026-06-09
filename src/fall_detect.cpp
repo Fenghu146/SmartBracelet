@@ -1,6 +1,6 @@
 // Fall detection using IMU acceleration thresholds
-// Algorithm: detect free-fall â†’ impact â†’ motionless sequence
-// Based on typical fall signature: sudden drop (<0.5g) â†’ impact (>3g) â†’ stillness
+// Algorithm: detect free-fall â†?impact â†?motionless sequence
+// Based on typical fall signature: sudden drop (<0.5g) â†?impact (>3g) â†?stillness
 
 #include "fall_detect.h"
 #include "debug_log.h"

@@ -153,3 +153,29 @@ void nvs_set_batt_full_mv(uint16_t mv) {
 uint16_t nvs_get_batt_full_mv(void) {
     return prefs.getUShort("batt_full_mv", 4200);
 }
+
+// ── Weather location ──
+void nvs_set_weather_lat(const char *lat) {
+    prefs.putString("wx_lat", lat);
+}
+
+void nvs_get_weather_lat(char *buf, int maxlen) {
+    String s = prefs.getString("wx_lat", "");
+    strncpy(buf, s.c_str(), maxlen - 1);
+    buf[maxlen - 1] = '\0';
+}
+
+void nvs_set_weather_lon(const char *lon) {
+    prefs.putString("wx_lon", lon);
+}
+
+void nvs_get_weather_lon(char *buf, int maxlen) {
+    String s = prefs.getString("wx_lon", "");
+    strncpy(buf, s.c_str(), maxlen - 1);
+    buf[maxlen - 1] = '\0';
+}
+
+bool nvs_has_weather_location(void) {
+    String lat = prefs.getString("wx_lat", "");
+    return lat.length() > 0;
+}
