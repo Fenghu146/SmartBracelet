@@ -5,7 +5,6 @@
 #include "ui_styles.h"
 #include "stopwatch.h"
 #include "weather.h"
-#include "activity.h"
 #include "player.h"
 #include "service/audio.h"
 #include "service/voice_chat.h"
@@ -349,17 +348,16 @@ static void music_page_create(lv_obj_t *parent) {
 
 void ui_pages_init(lv_obj_t **pages, int num_pages, CST816S *touch_dev) {
     // Pages: 0=watchface, 1=analog, 2=sensor, 3=notif, 4=stopwatch,
-    //        5=weather, 6=activity, 7=player, 8=voice, 9=music
+    //        5=weather, 6=player, 7=voice, 8=music
     pages[0] = lv_obj_create(NULL); watchface_create(pages[0]);
     pages[1] = lv_obj_create(NULL); analog_watchface_create(pages[1]);
     pages[2] = lv_obj_create(NULL); sensor_page_create(pages[2]);
     pages[3] = lv_obj_create(NULL); notif_page_create(pages[3]);
     pages[4] = lv_obj_create(NULL); stopwatch_create(pages[4]);
     pages[5] = lv_obj_create(NULL); weather_create(pages[5]);
-    pages[6] = lv_obj_create(NULL); activity_create(pages[6]);
-    pages[7] = lv_obj_create(NULL); player_create(pages[7]);
-    pages[8] = lv_obj_create(NULL); voice_chat_page_create(pages[8]);
-    pages[9] = lv_obj_create(NULL); music_page_create(pages[9]);
+    pages[6] = lv_obj_create(NULL); player_create(pages[6]);
+    pages[7] = lv_obj_create(NULL); voice_chat_page_create(pages[7]);
+    pages[8] = lv_obj_create(NULL); music_page_create(pages[8]);
     status_bar_create(lv_layer_top());
     lv_scr_load(pages[0]);
 }

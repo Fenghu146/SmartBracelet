@@ -6,7 +6,6 @@
 #include "wrist_detect.h"
 #include "fall_detect.h"
 #include "motion_intensity.h"
-#include "activity.h"
 #include "debug_log.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -46,7 +45,6 @@ static void sensor_reading_task(void *param) {
             }
 
             // Process data (these are quick math, no I/O)
-            activity_push_data(ax, ay, az, gx, gy, gz);
             step_counter_update(ax, ay, az);
             wrist_detect_update(ax, ay, az);
             fall_detect_update(ax, ay, az);
