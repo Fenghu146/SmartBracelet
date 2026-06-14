@@ -37,7 +37,6 @@ static lv_obj_t *gyro_label = nullptr;
 static lv_obj_t *batt_volt_label = nullptr;
 static lv_obj_t *intensity_label = nullptr;
 static lv_obj_t *calories_label = nullptr;
-static lv_obj_t *sleep_label = nullptr;
 
 // 鈹€鈹€ Analog watchface objects 鈹€鈹€
 static lv_obj_t *analog_face = nullptr;
@@ -185,12 +184,6 @@ static void sensor_page_create(lv_obj_t *parent) {
     lv_obj_set_style_text_font(calories_label, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(calories_label, lv_color_hex(0xff4466), 0);
     lv_obj_align(calories_label, LV_ALIGN_LEFT_MID, 16, 88);
-
-    sleep_label = lv_label_create(parent);
-    lv_label_set_text(sleep_label, "SLP: --");
-    lv_obj_set_style_text_font(sleep_label, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(sleep_label, lv_color_hex(0x8866ff), 0);
-    lv_obj_align(sleep_label, LV_ALIGN_LEFT_MID, 16, 112);
 }
 
 // 鈹€鈹€ Analog watchface 鈹€鈹€
@@ -451,15 +444,6 @@ void ui_update_sensor_page(const ui_telemetry_t *t) {
         t->intensity, t->mets);
     lv_label_set_text_fmt(calories_label, "CAL %.0fkcal",
         t->calories);
-    if (t->sleeping) {
-        lv_label_set_text_fmt(sleep_label, "SLP %dh%dm D:%dm",
-            t->sleep_total_min / 60, t->sleep_total_min % 60, t->sleep_deep_min);
-    } else if (t->sleep_total_min > 0) {
-        lv_label_set_text_fmt(sleep_label, "SLP %dh%dm (awake)",
-            t->sleep_total_min / 60, t->sleep_total_min % 60);
-    } else {
-        lv_label_set_text(sleep_label, "SLP: --");
-    }
 }
 
 void ui_update_notif_page(void) {

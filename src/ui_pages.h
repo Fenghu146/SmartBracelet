@@ -39,9 +39,6 @@ typedef struct {
     uint8_t intensity;      // 0-100
     float mets;             // METs
     float calories;         // kcal since daily reset
-    bool sleeping;          // currently sleeping
-    int sleep_total_min;    // total sleep minutes
-    int sleep_deep_min;     // deep sleep minutes
 } ui_telemetry_t;
 
 // Initialize all pages and status bar

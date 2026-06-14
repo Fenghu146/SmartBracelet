@@ -148,8 +148,16 @@ void player_create(lv_obj_t *parent) {
 }
 
 void player_update(void) {
-  if (audio_is_playing()) {
-    lv_label_set_text(status_label, "Playing...");
-    lv_label_set_text(play_btn_lbl, "Stop");
+  static bool was_playing = false;
+  bool now_playing = audio_is_playing();
+  if (now_playing != was_playing) {
+    was_playing = now_playing;
+    if (now_playing) {
+      lv_label_set_text(status_label, "Playing...");
+      lv_label_set_text(play_btn_lbl, "Stop");
+    } else {
+      lv_label_set_text(status_label, "Stopped");
+      lv_label_set_text(play_btn_lbl, "Play");
+    }
   }
 }
