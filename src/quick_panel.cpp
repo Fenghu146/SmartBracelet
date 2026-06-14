@@ -9,11 +9,6 @@
 #include <BLEDevice.h>
 #include <stdio.h>
 
-#ifndef LCD_WIDTH
-#define LCD_WIDTH 240
-#define LCD_HEIGHT 284
-#endif
-
 static lv_obj_t *qp_overlay = nullptr;
 static lv_obj_t *qp_container = nullptr;
 static lv_obj_t *qp_time = nullptr;
@@ -33,6 +28,12 @@ static bool qp_dnd = false;
 
 static void qp_overlay_click(lv_event_t *e) {
     if (lv_event_get_target(e) == qp_overlay) quick_panel_hide();
+}
+
+// Helper: update toggle button colors based on state
+static void update_toggle_style(lv_obj_t *btn, lv_obj_t *lbl, bool on) {
+    lv_obj_set_style_bg_color(btn, on ? lv_color_hex(0x00d4ff) : lv_color_hex(0x2a2a45), 0);
+    lv_obj_set_style_text_color(lbl, on ? lv_color_hex(0x000000) : lv_color_hex(0x888899), 0);
 }
 
 static void qp_mk_btn(lv_obj_t *par, lv_obj_t **btn, lv_obj_t **lbl,
@@ -55,15 +56,13 @@ static void qp_mk_btn(lv_obj_t *par, lv_obj_t **btn, lv_obj_t **lbl,
 static void qp_on_wifi(lv_event_t *e) {
     qp_wifi = !qp_wifi;
     if (qp_wifi) wifi_power_on(); else wifi_power_off();
-    lv_obj_set_style_bg_color(qp_wifi_btn, qp_wifi ? lv_color_hex(0x00d4ff) : lv_color_hex(0x2a2a45), 0);
-    lv_obj_set_style_text_color(qp_wifi_lbl, qp_wifi ? lv_color_hex(0x000000) : lv_color_hex(0x888899), 0);
+    update_toggle_style(qp_wifi_btn, qp_wifi_lbl, qp_wifi);
 }
 
 static void qp_on_ble(lv_event_t *e) {
     qp_ble = !qp_ble;
     if (qp_ble) BLEDevice::startAdvertising(); else BLEDevice::stopAdvertising();
-    lv_obj_set_style_bg_color(qp_ble_btn, qp_ble ? lv_color_hex(0x00d4ff) : lv_color_hex(0x2a2a45), 0);
-    lv_obj_set_style_text_color(qp_ble_lbl, qp_ble ? lv_color_hex(0x000000) : lv_color_hex(0x888899), 0);
+    update_toggle_style(qp_ble_btn, qp_ble_lbl, qp_ble);
 }
 
 static void qp_on_dnd(lv_event_t *e) {
@@ -170,8 +169,6 @@ void quick_panel_update(int hour, int minute, int batt_pct, bool wifi_on, bool b
     char bs[8]; snprintf(bs, sizeof(bs), "%d%%", batt_pct);
     lv_label_set_text(qp_batt, bs);
     qp_wifi = wifi_on; qp_ble = ble_on;
-    lv_obj_set_style_bg_color(qp_wifi_btn, qp_wifi ? lv_color_hex(0x00d4ff) : lv_color_hex(0x2a2a45), 0);
-    lv_obj_set_style_text_color(qp_wifi_lbl, qp_wifi ? lv_color_hex(0x000000) : lv_color_hex(0x888899), 0);
-    lv_obj_set_style_bg_color(qp_ble_btn, qp_ble ? lv_color_hex(0x00d4ff) : lv_color_hex(0x2a2a45), 0);
-    lv_obj_set_style_text_color(qp_ble_lbl, qp_ble ? lv_color_hex(0x000000) : lv_color_hex(0x888899), 0);
+    update_toggle_style(qp_wifi_btn, qp_wifi_lbl, qp_wifi);
+    update_toggle_style(qp_ble_btn, qp_ble_lbl, qp_ble);
 }

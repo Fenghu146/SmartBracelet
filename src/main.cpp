@@ -55,8 +55,7 @@ XPowersPMU pmu;
 
 // 鈹€鈹€ Page management 鈹€鈹€
 static int current_page = 0;
-static const int NUM_PAGES = 11;
-static lv_obj_t *pages[11];
+static lv_obj_t *pages[PAGE_COUNT];
 
 // 鈹€鈹€ NTP sync 鈹€鈹€
 static unsigned long last_ntp_attempt = 0;
@@ -69,22 +68,39 @@ static bool wifi_was_turned_off = false;
 
 // 鈹€鈹€ Screen timeout 鈹€鈹€
 static unsigned long last_activity_time = 0;
-static bool screen_on = true;
 static const unsigned long DISPLAY_TIMEOUT_MS = 10000;
 static const unsigned long DEEP_SLEEP_TIMEOUT_MS = 30000;
 
 // 鈹€鈹€ Activity state 鈹€鈹€
 static int current_activity = -1;
 
-// 鈹€鈹€ Watch face 鈹€鈹€
+// -- Watch face --
 static int current_face = 0;
 static lv_obj_t *sport_page = nullptr;
+
+// -- Named constants (replacing magic numbers) --
+#define BAUD_RATE               115200
+#define USB_CONNECT_DELAY_MS    500
+#define DISPLAY_TEST_BLUE       0x001F
+#define LCD_CLEAR_TOP_END       19
+#define LCD_CLEAR_BOT_START     304
+#define LCD_CLEAR_BOT_END       319
+#define LCD_CLEAR_WIDTH         240
+#define TICK_INTERVAL_ON_MS     1000
+#define TICK_INTERVAL_OFF_MS    5000
+#define NVS_SAVE_INTERVAL_MS    60000
+#define IMU_FEATURE_INTERVAL_MS 5000
+#define NTP_RESYNC_INTERVAL_MS  3600000
+#define WIFI_POWER_OFF_DELAY_MS 30000
+#define PMU_SETTLE_DELAY_MS     200
+#define FALL_NOTIFY_PAGE        PAGE_NOTIF
+#define FALL_PAGE_ANIM_MS        200
+#define DEFAULT_YEAR            2026
 
 // 鈹€鈹€ RTC helper for NTP sync 鈹€鈹€
 void set_rtc_from_tm(struct tm *ti) {
     rtc.setDateTime(ti->tm_year + 1900, ti->tm_mon + 1, ti->tm_mday,
         ti->tm_hour, ti->tm_min, ti->tm_sec);
-    LOG_INFO("RTC: time updated from NTP");
 }
 
 // 鈹€鈹€ Battery helpers 鈹€鈹€
@@ -101,71 +117,22 @@ static bool batt_is_valid(void) {
     uint16_t mv = read_batt_voltage_raw();
     return (mv >= 500 && mv <= 5000);
 }
-
-// 鈹€鈹€ Backlight / screen (PWM) 鈹€鈹€
-#define BL_PWM_CH    0
-#define BL_PWM_FREQ  5000
-#define BL_PWM_RES   8   // 0-255
-
-static int bl_current_level = 255;
-
-void backlight_init(void) {
-    ledcSetup(BL_PWM_CH, BL_PWM_FREQ, BL_PWM_RES);
-    ledcAttachPin(LCD_BL, BL_PWM_CH);
-    // Apply saved brightness
-    int pct = nvs_get_brightness();
-    bl_current_level = (pct * 255) / 100;
-    if (bl_current_level < 10) bl_current_level = 10;
-    ledcWrite(BL_PWM_CH, bl_current_level);
+static bool is_charging(xpowers_chg_status_t cs) {
+    return (cs == XPOWERS_AXP2101_CHG_CC_STATE ||
+            cs == XPOWERS_AXP2101_CHG_PRE_STATE ||
+            cs == XPOWERS_AXP2101_CHG_TRI_STATE);
 }
 
-void backlight_set_level(int level) {
-    if (level < 0) level = 0;
-    if (level > 255) level = 255;
-    bl_current_level = level;
-    ledcWrite(BL_PWM_CH, level);
-}
-
-int backlight_get_level(void) {
-    return bl_current_level;
-}
-
-void backlight_on(void) {
-    int pct = nvs_get_brightness();
-    int level = (pct * 255) / 100;
-    if (level < 10) level = 10;
-    backlight_set_level(level);
-    screen_on = true;
-}
-
-void backlight_off(void) {
-    backlight_set_level(0);
-    screen_on = false;
-}
-
-static void set_backlight(bool on) {
-    if (on) {
-        backlight_on();
-        // Restore full performance
-        sensor_task_set_rate(125);
-        setCpuFrequencyMhz(240);
-    } else {
-        backlight_off();
-        // Enter low power mode
-        setCpuFrequencyMhz(80);
-        sensor_task_set_rate(25);
-    }
-}
 
 static void reset_activity_timer(void) {
     last_activity_time = millis();
-    if (!screen_on) set_backlight(true);
+    if (!screen_is_on()) set_backlight(true);
 }
 
 // 鈹€鈹€ Page switching 鈹€鈹€
 static void switch_page(int dir) {
     int next = current_page + dir;
-    if (next < 0 || next >= NUM_PAGES) return;
+    if (next < 0 || next >= PAGE_COUNT) return;
     current_page = next;
     nvs_set_crash_page(current_page);  // Save for crash recovery
     lv_scr_load_anim(pages[next],
@@ -183,13 +150,13 @@ static void handle_gesture(void) {
         // Cycle watch face
         current_face = watch_face_next(current_face);
         nvs_set_watch_face(current_face);
-        // Load the appropriate face as page 0
+        // Load the appropriate face
         if (current_face == FACE_ANALOG) {
-            lv_scr_load(pages[1]);  // analog is page 1
+            lv_scr_load(pages[PAGE_ANALOG]);
         } else if (current_face == FACE_SPORT) {
             lv_scr_load(sport_page);
         } else {
-            lv_scr_load(pages[0]);  // digital
+            lv_scr_load(pages[PAGE_DIGITAL]);
         }
         LOG_INFO("Watch face: %s", watch_face_name(current_face));
     }
@@ -204,9 +171,7 @@ static void fill_telemetry(ui_telemetry_t *t) {
     t->batt_mv = read_batt_voltage_raw();
     t->batt_valid = batt_is_valid();
     xpowers_chg_status_t cs = pmu.getChargerStatus();
-    t->charging = (cs == XPOWERS_AXP2101_CHG_CC_STATE ||
-                   cs == XPOWERS_AXP2101_CHG_PRE_STATE ||
-                   cs == XPOWERS_AXP2101_CHG_TRI_STATE);
+    t->charging = is_charging(cs);
     t->usb_powered = pmu.isVbusIn();
     t->step_count = step_counter_get();
     t->wifi_connected = wifi_is_connected();
@@ -226,21 +191,11 @@ static void fill_telemetry(ui_telemetry_t *t) {
 // 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲锟?
 // Setup
 // 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲锟?
-void setup() {
-    backlight_init();  // PWM backlight with saved brightness
-    last_activity_time = millis();
-
-    USBSerial.begin(115200);
-    // Don't wait for USBSerial - just try to connect
-    delay(500);
-    LOG_INFO("Booting... Firmware: %s", FIRMWARE_VERSION);
-
-    Wire.begin(IIC_SDA, IIC_SCL);
-
+// -- Setup: display hardware init --
+static void setup_display(void) {
     bus = new Arduino_ESP32SPI(LCD_DC, LCD_CS, LCD_SCK, LCD_MOSI, GFX_NOT_DEFINED);
     gfx = new Arduino_ST7789(bus, LCD_RST, 0, true, LCD_WIDTH, LCD_HEIGHT, 0, 20, 0, 0);
     if (!gfx->begin()) {
-        // Blink backlight to signal display init failure
         for (int i = 0; i < 10; i++) {
             digitalWrite(LCD_BL, (i % 2) ? HIGH : LOW);
             delay(200);
@@ -249,24 +204,23 @@ void setup() {
         while (true) delay(100);
     }
 
-    // Quick display test - fill screen with blue to confirm display works
-    gfx->fillScreen(0x001F);  // Blue
+    gfx->fillScreen(DISPLAY_TEST_BLUE);
     delay(100);
 
     // Clear physical rows 0-19 and 304-319 (outside LVGL space)
     bus->beginWrite();
     bus->writeC8D16D16(ST7789_CASET, 0, 239);
-    bus->writeC8D16D16(ST7789_RASET, 0, 19);
+    bus->writeC8D16D16(ST7789_RASET, 0, LCD_CLEAR_TOP_END);
     bus->writeCommand(ST7789_RAMWR);
-    bus->writeRepeat(0x0000, 240 * 20);
-    bus->writeC8D16D16(ST7789_RASET, 304, 319);
+    bus->writeRepeat(0x0000, LCD_CLEAR_WIDTH * 20);
+    bus->writeC8D16D16(ST7789_RASET, LCD_CLEAR_BOT_START, LCD_CLEAR_BOT_END);
     bus->writeCommand(ST7789_RAMWR);
-    bus->writeRepeat(0x0000, 240 * 16);
+    bus->writeRepeat(0x0000, LCD_CLEAR_WIDTH * 16);
     bus->endWrite();
+}
 
-    lv_init();
-    lv_port_disp_init();
-    ui_styles_init();
+// -- Setup: software module init --
+static void setup_modules(void) {
     tf_init();
     audio_init();
     voice_chat_init();
@@ -279,29 +233,31 @@ void setup() {
     batt_health_init();
     quick_panel_init();
     wrist_detect_set_callback(reset_activity_timer);
+}
 
+// -- Setup: touch controller --
+static void setup_touch(void) {
     touch = new CST816S(TP_SDA, TP_SCL, TP_RST, TP_INT);
     touch->begin();
-    touch->disable_auto_sleep();  // Prevent touch controller from sleeping
-    touch->enable_double_click(); // Enable double-tap gesture
+    touch->disable_auto_sleep();
+    touch->enable_double_click();
     lv_port_indev_init();
 
-    // Initialize UI pages
-    ui_pages_init(pages, NUM_PAGES, touch);
-    // Settings page (index 10)
-    pages[10] = settings_page_create();
+    ui_pages_init(pages, PAGE_COUNT, touch);
+    pages[PAGE_SETTINGS] = settings_page_create();
 
-    // Create sport face page (used when face=2)
     sport_page = lv_obj_create(NULL);
     sport_face_create(sport_page);
 
-    // Restore watch face preference
     current_face = nvs_get_watch_face();
     if (current_face >= FACE_COUNT) current_face = 0;
+}
 
+// -- Setup: RTC, IMU, PMU, sensors, BLE, WiFi, NVS --
+static void setup_system(void) {
     if (rtc.init(Wire, IIC_SDA, IIC_SCL, PCF85063_SLAVE_ADDRESS)) {
         RTC_DateTime dt = rtc.getDateTime();
-        if (dt.year < 2026) rtc.setDateTime(2026, 5, 20, 19, 0, 0);
+        if (dt.year < DEFAULT_YEAR) rtc.setDateTime(DEFAULT_YEAR, 5, 20, 19, 0, 0);
     }
 
     if (imu.begin(Wire, QMI8658_L_SLAVE_ADDRESS, IIC_SDA, IIC_SCL)) {
@@ -333,33 +289,29 @@ void setup() {
         pmu.writeRegister(0x12, 0x01);
         int icc = pmu.readRegister(0x62);
         pmu.writeRegister(0x62, icc | 0x80);
-        delay(200);
+        delay(PMU_SETTLE_DELAY_MS);
         LOG_INFO("PMU: connected=%d vbus_in=%d chg=%d",
             pmu.isBatteryConnect(), pmu.isVbusIn(), pmu.getChargerStatus());
     }
 
-    // Start sensor reading task on Core 0 (125Hz, high priority)
     sensor_task_start(&imu);
 
     ble_srv_init();
-    // ble_hid_init disabled - HID service uses too many GATT handles
-    // ble_hid_init(ble_srv_get_server());
     wifi_ntp_init();
 
-    // NVS: restore step count and settings
     nvs_store_init();
     int saved_steps = nvs_get_steps_today();
     step_counter_set(saved_steps);
     LOG_INFO("Restored %d steps from NVS", saved_steps);
 
-    // Crash recovery: check if last reset was due to panic
+    // Crash recovery
     esp_reset_reason_t reset_reason = esp_reset_reason();
     LOG_INFO("Reset reason: %d", reset_reason);
     if (reset_reason == ESP_RST_PANIC || reset_reason == ESP_RST_WDT ||
         reset_reason == ESP_RST_INT_WDT || reset_reason == ESP_RST_TASK_WDT) {
         int crash_page = nvs_get_crash_page();
         int crash_steps = nvs_get_crash_steps();
-        if (crash_page >= 0 && crash_page < NUM_PAGES) {
+        if (crash_page >= 0 && crash_page < PAGE_COUNT) {
             current_page = crash_page;
             lv_scr_load(pages[crash_page]);
             LOG_INFO("Crash recovery: restored page %d, steps %d", crash_page, crash_steps);
@@ -369,22 +321,60 @@ void setup() {
             LOG_INFO("Crash recovery: restored %d steps from crash state", crash_steps);
         }
     }
+}
 
-    // Register shutdown handler for crash state saving
-    // Note: only async-signal-safe operations allowed in handler
-    // NVS writes use Preferences which is NOT async-safe,
-    // so we rely on periodic saves in loop() instead
+void setup() {
+    backlight_init();
+    last_activity_time = millis();
+
+    USBSerial.begin(BAUD_RATE);
+    delay(USB_CONNECT_DELAY_MS);
+    LOG_INFO("Booting... Firmware: %s", FIRMWARE_VERSION);
+
+    Wire.begin(IIC_SDA, IIC_SCL);
+
+    setup_display();
+    lv_init();
+    lv_port_disp_init();
+    ui_styles_init();
+    setup_modules();
+    setup_touch();
+    setup_system();
 
     LOG_INFO("Ready");
 }
 
-// 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲锟?
-// Main loop
-// 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲锟?
-void loop() {
-    lv_timer_handler();
-    wifi_ntp_loop();
-    // Handle OTA restart (download runs in background task)
+
+// -- Sub-loop: USBSerial-to-BLE bridge + OTA command --
+static void loop_serial_bridge(void) {
+    static char serial_buf[256];
+    static int serial_len = 0;
+    while (USBSerial.available()) {
+        char c = USBSerial.read();
+        if (c == '\n' || c == '\r') {
+            if (serial_len > 0) {
+                serial_buf[serial_len] = 0;
+                if (strncmp(serial_buf, "ota ", 4) == 0) {
+                    LOG_INFO("OTA: starting from %s", serial_buf + 4);
+                    ota_start(serial_buf + 4);
+                } else {
+                    ble_srv_send(serial_buf);
+                }
+                serial_len = 0;
+            }
+        } else {
+            if (serial_len < 255) {
+                serial_buf[serial_len++] = c;
+            } else {
+                // Buffer overflow: discard and reset
+                serial_len = 0;
+            }
+        }
+    }
+}
+
+// -- Sub-loop: BLE notifications, OTA, NTP, WiFi power --
+static void loop_communication(void) {
     if (ota_check_restart()) {
         delay(100);
         ESP.restart();
@@ -404,16 +394,14 @@ void loop() {
     }
 
     if (wifi_is_connected() && !ntp_synced) ntp_synced = wifi_ntp_sync();
-    if (ntp_synced && millis() - last_ntp_attempt > 3600000) {
+    if (ntp_synced && millis() - last_ntp_attempt > NTP_RESYNC_INTERVAL_MS) {
         last_ntp_attempt = millis(); wifi_ntp_sync();
     }
 
     // WiFi power management
     if (wifi_is_powered()) {
-        if (ntp_synced && wifi_off_time == 0) {
-            wifi_off_time = millis();
-        }
-        if (wifi_off_time > 0 && millis() - wifi_off_time > 30000 && ota_get_state() == OTA_IDLE) {
+        if (ntp_synced && wifi_off_time == 0) wifi_off_time = millis();
+        if (wifi_off_time > 0 && millis() - wifi_off_time > WIFI_POWER_OFF_DELAY_MS && ota_get_state() == OTA_IDLE) {
             wifi_power_off();
             wifi_was_turned_off = true;
         }
@@ -427,49 +415,25 @@ void loop() {
     // Handle BLE notifications
     if (ble_notification.has_new) {
         ble_notification.has_new = 0;
-
-        // Add to notification history
         RTC_DateTime dt = rtc.getDateTime();
         notif_history_add(ble_notification.app_id, ble_notification.title,
                          ble_notification.body, dt.hour, dt.minute);
-
         if (ble_srv_get_dnd()) {
-            LOG_INFO("Notify: [DND] [%s] %s",
-                ble_notification.app_id, ble_notification.title);
+            LOG_INFO("Notify: [DND] [%s] %s", ble_notification.app_id, ble_notification.title);
         } else {
-            LOG_INFO("Notify: [%s] %s - %s",
-                ble_notification.app_id, ble_notification.title, ble_notification.body);
+            LOG_INFO("Notify: [%s] %s - %s", ble_notification.app_id, ble_notification.title, ble_notification.body);
         }
         char reply[64];
         snprintf(reply, sizeof(reply), "ack:%s", ble_notification.app_id);
         ble_srv_send(reply);
     }
 
-    // USBSerial-to-BLE bridge + OTA command
-    static char serial_buf[256];
-    static int serial_len = 0;
-    while (USBSerial.available() && serial_len < 255) {
-        char c = USBSerial.read();
-        if (c == '\n' || c == '\r') {
-            if (serial_len > 0) {
-                serial_buf[serial_len] = 0;
-                if (strncmp(serial_buf, "ota ", 4) == 0) {
-                    LOG_INFO("OTA: starting from %s", serial_buf + 4);
-                    ota_start(serial_buf + 4);
-                } else {
-                    ble_srv_send(serial_buf);
-                }
-                serial_len = 0;
-            }
-        } else {
-            serial_buf[serial_len++] = c;
-        }
-    }
+    loop_serial_bridge();
+}
 
-    // IMU data is read by sensor task on Core 0
-    // fall detection alert still checked here
-
-    // Handle fall detection alert
+// -- Sub-loop: periodic telemetry, UI updates, BLE push --
+// -- Fall detection alert handler --
+static void handle_fall_alert(void) {
     if (fall_detect_has_fallen()) {
         LOG_INFO("*** FALL DETECTED! Sending alert ***");
         set_backlight(true);
@@ -478,105 +442,101 @@ void loop() {
         strncpy(ble_notification.title, "Fall Detected!", sizeof(ble_notification.title));
         strncpy(ble_notification.body, "Press to dismiss", sizeof(ble_notification.body));
         ble_notification.has_new = 1;
-        current_page = 3;
-        lv_scr_load_anim(pages[3], LV_SCR_LOAD_ANIM_MOVE_TOP, 200, 0, false);
+        current_page = FALL_NOTIFY_PAGE;
+        lv_scr_load_anim(pages[FALL_NOTIFY_PAGE], LV_SCR_LOAD_ANIM_MOVE_TOP, FALL_PAGE_ANIM_MS, 0, false);
+    }
+}
+
+// -- UI page update dispatcher --
+static void update_ui_pages(const ui_telemetry_t *telem) {
+    if (screen_is_on()) {
+        ui_update_watchface(telem);
+        if (current_page == PAGE_ANALOG) ui_update_analog(telem->hour, telem->minute, telem->second);
+        if (current_page == PAGE_SENSOR) ui_update_sensor_page(telem);
+        if (current_page == PAGE_NOTIF) ui_update_notif_page();
+        if (current_page == PAGE_WEATHER) weather_update();
+        if (current_page == PAGE_ACTIVITY) activity_update();
+        if (current_page == PAGE_PLAYER) player_update();
+        if (current_page == PAGE_VOICE) voice_chat_page_update();
+        if (current_page == PAGE_SETTINGS) settings_page_update();
+        if (current_face == FACE_SPORT && current_page == PAGE_DIGITAL) sport_face_update(telem);
+        if (quick_panel_is_visible())
+            quick_panel_update(telem->hour, telem->minute, telem->batt_percent, telem->wifi_connected, ble_is_connected());
+    } else {
+        ui_update_watchface(telem);
+    }
+}
+
+// -- BLE telemetry push + NVS save + battery health --
+static void push_ble_telemetry(const ui_telemetry_t *telem) {
+    sleep_tracker_update(telem->intensity, telem->hour, telem->minute);
+
+    int act = activity_get_current();
+    if (act != current_activity) {
+        current_activity = act;
+        ble_srv_update_activity(act >= 0 ? (uint8_t)act : 2);
+    }
+    ble_srv_update_steps(step_counter_get());
+
+    // Periodically save steps to NVS (every 60s)
+    {
+        static unsigned long last_nvs_save = 0;
+        if (millis() - last_nvs_save > NVS_SAVE_INTERVAL_MS) {
+            last_nvs_save = millis();
+            nvs_set_steps_today(step_counter_get());
+            nvs_set_crash_page(current_page);
+            nvs_set_crash_steps(step_counter_get());
+        }
     }
 
-    // Periodic UI updates (reduced rate when screen off)
+    // Use cached values from fill_telemetry instead of re-reading PMU registers
+    if (telem->batt_valid) ble_srv_update_batt_raw(telem->batt_mv);
+    else if (telem->usb_powered) ble_srv_update_batt_raw(0xFFFF);
+
+    // Battery health tracking (reuse cached charging state & voltage)
+    batt_health_update(telem->charging, telem->batt_mv);
+
+    // Push IMU features for AI co-inference (every 5s)
+    {
+        static unsigned long last_feat_time = 0;
+        if (millis() - last_feat_time > IMU_FEATURE_INTERVAL_MS) {
+            last_feat_time = millis();
+            const float *feat = activity_get_features();
+            if (feat) ble_srv_update_imu_features(feat, 12);
+        }
+    }
+}
+
+static void loop_telemetry(void) {
+    handle_fall_alert();
+
     static unsigned long last_tick = 0;
-    unsigned long tick_interval = screen_on ? 1000 : 5000;
+    unsigned long tick_interval = screen_is_on() ? TICK_INTERVAL_ON_MS : TICK_INTERVAL_OFF_MS;
     if (millis() - last_tick > tick_interval) {
         last_tick = millis();
         ui_telemetry_t telem;
         fill_telemetry(&telem);
 
-        // Daily step counter reset check
         if (nvs_check_daily_reset(telem.day)) {
             step_counter_reset();
             motion_intensity_reset_calories();
             sleep_tracker_reset();
         }
 
-        if (screen_on) {
-            ui_update_watchface(&telem);
-            if (current_page == 1) ui_update_analog(telem.hour, telem.minute, telem.second);
-            if (current_page == 2) ui_update_sensor_page(&telem);
-            if (current_page == 3) ui_update_notif_page();
-            if (current_page == 5) weather_update();
-            if (current_page == 6) activity_update();
-            if (current_page == 7) player_update();
-            if (current_page == 8) voice_chat_page_update();
-            if (current_page == 10) settings_page_update();
-            // Sport face update (when sport face is active as page 0)
-            if (current_face == FACE_SPORT && current_page == 0) {
-                sport_face_update(&telem);
-            }
-            // Quick panel update
-            if (quick_panel_is_visible()) {
-                quick_panel_update(telem.hour, telem.minute, telem.batt_percent,
-                                   telem.wifi_connected, ble_is_connected());
-            }
-        } else {
-            ui_update_watchface(&telem);
-        }
-
-        // Sleep tracking (update every tick with intensity + time)
-        sleep_tracker_update(telem.intensity, telem.hour, telem.minute);
-
-        // Push telemetry to BLE
-        int act = activity_get_current();
-        if (act != current_activity) {
-            current_activity = act;
-            ble_srv_update_activity(act >= 0 ? (uint8_t)act : 2);
-        }
-        ble_srv_update_steps(step_counter_get());
-
-        // Periodically save steps to NVS (every 60s to avoid excessive writes)
-        {
-            static unsigned long last_nvs_save = 0;
-            if (millis() - last_nvs_save > 60000) {
-                last_nvs_save = millis();
-                nvs_set_steps_today(step_counter_get());
-                // Also save crash recovery state
-                nvs_set_crash_page(current_page);
-                nvs_set_crash_steps(step_counter_get());
-            }
-        }
-        if (batt_is_valid())
-            ble_srv_update_batt_raw(read_batt_voltage_raw());
-        else if (pmu.isVbusIn())
-            ble_srv_update_batt_raw(0xFFFF);
-
-        // Battery health tracking
-        {
-            xpowers_chg_status_t cs = pmu.getChargerStatus();
-            bool charging = (cs == XPOWERS_AXP2101_CHG_CC_STATE ||
-                           cs == XPOWERS_AXP2101_CHG_PRE_STATE ||
-                           cs == XPOWERS_AXP2101_CHG_TRI_STATE);
-            batt_health_update(charging, read_batt_voltage_raw());
-        }
-
-        // Push IMU features for AI co-inference (every 5s)
-        {
-            static unsigned long last_feat_time = 0;
-            if (millis() - last_feat_time > 5000) {
-                last_feat_time = millis();
-                const float *feat = activity_get_features();
-                if (feat) ble_srv_update_imu_features(feat, 12);
-            }
-        }
+        update_ui_pages(&telem);
+        push_ble_telemetry(&telem);
     }
 
-    // Stopwatch needs sub-second precision
-    if (current_page == 4) stopwatch_update();
+    if (current_page == PAGE_STOPWATCH) stopwatch_update();
+}
 
-    // Screen timeout
-    if (screen_on && millis() - last_activity_time > DISPLAY_TIMEOUT_MS) {
+// -- Sub-loop: screen timeout and deep sleep --
+static void loop_power_management(void) {
+    if (screen_is_on() && millis() - last_activity_time > DISPLAY_TIMEOUT_MS) {
         set_backlight(false);
     }
 
-    // Deep sleep timeout
-    if (!screen_on && millis() - last_activity_time > DEEP_SLEEP_TIMEOUT_MS) {
+    if (!screen_is_on() && millis() - last_activity_time > DEEP_SLEEP_TIMEOUT_MS) {
         if (pmu.isVbusIn()) {
             last_activity_time = millis();
         } else {
@@ -590,27 +550,36 @@ void loop() {
             esp_deep_sleep_start();
         }
     }
+}
 
-    // Gesture handling
+// -- Sub-loop: touch gesture handling --
+static void loop_gesture(void) {
     if (touch) {
         static uint8_t last_gesture = 0xFF;
         static bool last_pressed = false;
         uint8_t g = touch->data.gestureID;
-        bool pressed = (touch->data.event == 0) &&
-                       (touch->data.x > 0 || touch->data.y > 0);
+        bool pressed = (touch->data.event == 0) && (touch->data.x > 0 || touch->data.y > 0);
 
-        if (pressed && !last_pressed) {
-            reset_activity_timer();
-        }
+        if (pressed && !last_pressed) reset_activity_timer();
         last_pressed = pressed;
 
         if (g != last_gesture && g != NONE) {
             last_gesture = g;
             handle_gesture();
         }
-        // Reset last_gesture when gesture ends
         if (g == NONE) last_gesture = 0xFF;
     }
+}
 
+// ===========================================================
+// Main loop
+// ===========================================================
+void loop() {
+    lv_timer_handler();
+    wifi_ntp_loop();
+    loop_communication();
+    loop_telemetry();
+    loop_power_management();
+    loop_gesture();
     delay(2);
 }

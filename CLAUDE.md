@@ -41,7 +41,7 @@
 
 当我说"交接"时，你需要：
 
-1. 检查 `codegraph status`，确保索引是最新的（如果过期则 `codegraph sync`）
+1. 检查 `rtk codeatlas status`，确保索引是最新的（如果过期则 `rtk codeatlas scan . --full`）
 2. 检查 git status，了解当前工作状态
 3. 更新 DEBUG_REPORT.md，追加最近的调试/开发记录
 4. 如果有代码改动且未提交，执行 git add + git commit

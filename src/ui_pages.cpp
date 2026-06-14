@@ -15,15 +15,9 @@
 #include "notif_history.h"
 #include <math.h>
 
-// LCD dimensions (from pin_config.h or lv_port_disp)
-#ifndef LCD_WIDTH
-#define LCD_WIDTH 240
-#define LCD_HEIGHT 284
-#endif
-
 static const int CX = 120, CY = 142; // screen center
 
-// ── Status bar objects ──
+// 鈹€鈹€ Status bar objects 鈹€鈹€
 static lv_obj_t *wifi_icon = nullptr;
 static lv_obj_t *ble_icon = nullptr;
 static lv_obj_t *battery_bar_outer = nullptr;
@@ -32,12 +26,12 @@ static lv_obj_t *battery_label = nullptr;
 static lv_obj_t *charging_label = nullptr;
 static lv_obj_t *page_dots = nullptr;
 
-// ── Watchface objects ──
+// 鈹€鈹€ Watchface objects 鈹€鈹€
 static lv_obj_t *time_label = nullptr;
 static lv_obj_t *date_label = nullptr;
 static lv_obj_t *step_label = nullptr;
 
-// ── Sensor page objects ──
+// 鈹€鈹€ Sensor page objects 鈹€鈹€
 static lv_obj_t *accel_label = nullptr;
 static lv_obj_t *gyro_label = nullptr;
 static lv_obj_t *batt_volt_label = nullptr;
@@ -45,7 +39,7 @@ static lv_obj_t *intensity_label = nullptr;
 static lv_obj_t *calories_label = nullptr;
 static lv_obj_t *sleep_label = nullptr;
 
-// ── Analog watchface objects ──
+// 鈹€鈹€ Analog watchface objects 鈹€鈹€
 static lv_obj_t *analog_face = nullptr;
 static lv_obj_t *hour_hand = nullptr;
 static lv_obj_t *min_hand = nullptr;
@@ -56,14 +50,15 @@ static int prev_hour = -1, prev_min = -1, prev_sec = -1;
 static bool analog_inited = false;
 static lv_obj_t *dial_marks[12];
 
-// ── Notification page objects ──
+// 鈹€鈹€ Notification page objects 鈹€鈹€
 static lv_obj_t *notif_list = nullptr;
 static lv_obj_t *notif_empty_label = nullptr;
 
 static int last_batt = -1;
+static int last_notif_count = -1;  // Track notification count for incremental update
 static char time_str[12], date_str[32];
 
-// ── Status bar ──
+// 鈹€鈹€ Status bar 鈹€鈹€
 static void status_bar_create(lv_obj_t *parent) {
     wifi_icon = lv_label_create(parent);
     lv_label_set_text(wifi_icon, "~");
@@ -127,7 +122,7 @@ static void status_bar_create(lv_obj_t *parent) {
     lv_obj_set_style_text_color(page_dots, lv_color_hex(0x555566), 0);
 }
 
-// ── Digital watchface ──
+// 鈹€鈹€ Digital watchface 鈹€鈹€
 static void watchface_create(lv_obj_t *parent) {
     lv_obj_set_style_bg_color(parent, lv_color_hex(0x0d0d1a), 0);
 
@@ -151,7 +146,7 @@ static void watchface_create(lv_obj_t *parent) {
     lv_obj_align(step_label, LV_ALIGN_BOTTOM_MID, 0, -32);
 }
 
-// ── Sensor page ──
+// 鈹€鈹€ Sensor page 鈹€鈹€
 static void sensor_page_create(lv_obj_t *parent) {
     lv_obj_set_style_bg_color(parent, lv_color_hex(0x0d0d1a), 0);
 
@@ -198,7 +193,7 @@ static void sensor_page_create(lv_obj_t *parent) {
     lv_obj_align(sleep_label, LV_ALIGN_LEFT_MID, 16, 112);
 }
 
-// ── Analog watchface ──
+// 鈹€鈹€ Analog watchface 鈹€鈹€
 static void analog_create_hand(lv_obj_t **hand, lv_point_t pts[2],
     int len, int width, lv_color_t color) {
     *hand = lv_line_create(analog_face);
@@ -241,7 +236,7 @@ static void update_analog_hand(lv_obj_t *hand, lv_point_t pts[2],
     lv_line_set_points(hand, pts, 2);
 }
 
-// ── Notification page ──
+// 鈹€鈹€ Notification page 鈹€鈹€
 static void notif_page_create(lv_obj_t *parent) {
     lv_obj_set_style_bg_color(parent, lv_color_hex(0x0d0d1a), 0);
 
@@ -270,7 +265,7 @@ static void notif_page_create(lv_obj_t *parent) {
     lv_obj_set_scrollbar_mode(notif_list, LV_SCROLLBAR_MODE_AUTO);
 }
 
-// ── Music control page ──
+// 鈹€鈹€ Music control page 鈹€鈹€
 static void music_page_create(lv_obj_t *parent) {
     lv_obj_set_style_bg_color(parent, lv_color_hex(0x0d0d1a), 0);
 
@@ -355,9 +350,9 @@ static void music_page_create(lv_obj_t *parent) {
     lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -26);
 }
 
-// ══════════════════════════════════════════════════════════════�?
+// 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 // Public API
-// ══════════════════════════════════════════════════════════════�?
+// 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 
 void ui_pages_init(lv_obj_t **pages, int num_pages, CST816S *touch_dev) {
     // Pages: 0=watchface, 1=analog, 2=sensor, 3=notif, 4=stopwatch,
@@ -376,7 +371,7 @@ void ui_pages_init(lv_obj_t **pages, int num_pages, CST816S *touch_dev) {
     lv_scr_load(pages[0]);
 }
 
-int ui_get_num_pages(void) { return 10; }
+int ui_get_num_pages(void) { return PAGE_COUNT; }
 
 void ui_set_step_label(int steps) {
     if (step_label)
@@ -468,10 +463,15 @@ void ui_update_sensor_page(const ui_telemetry_t *t) {
 }
 
 void ui_update_notif_page(void) {
+    int cnt = notif_history_count();
+
+    // Only rebuild when count changes (new notification added or cleared)
+    if (cnt == last_notif_count) return;
+    last_notif_count = cnt;
+
     // Clear existing list items
     lv_obj_clean(notif_list);
 
-    int cnt = notif_history_count();
     if (cnt == 0) {
         lv_obj_clear_flag(notif_empty_label, LV_OBJ_FLAG_HIDDEN);
         return;
@@ -486,6 +486,8 @@ void ui_update_notif_page(void) {
         lv_obj_t *card = lv_obj_create(notif_list);
         lv_obj_remove_style_all(card);
         lv_obj_set_size(card, LV_PCT(100), LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_style_pad_row(card, 2, 0);
         lv_obj_set_style_bg_color(card, lv_color_hex(0x1a1a2e), 0);
         lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
         lv_obj_set_style_radius(card, 8, 0);
@@ -496,23 +498,26 @@ void ui_update_notif_page(void) {
         snprintf(hdr, sizeof(hdr), "%02d:%02d  %s", e->hour, e->minute, e->app);
         lv_obj_t *h = lv_label_create(card);
         lv_label_set_text(h, hdr);
+        lv_obj_set_width(h, LV_PCT(100));
         lv_obj_set_style_text_font(h, &lv_font_montserrat_10, 0);
         lv_obj_set_style_text_color(h, lv_color_hex(0x555566), 0);
 
         // Title
         lv_obj_t *t = lv_label_create(card);
         lv_label_set_text(t, e->title);
+        lv_obj_set_width(t, LV_PCT(100));
         lv_obj_set_style_text_font(t, &lv_font_montserrat_12, 0);
         lv_obj_set_style_text_color(t, lv_color_hex(0xffffff), 0);
+        lv_label_set_long_mode(t, LV_LABEL_LONG_DOT);
 
         // Body (truncated)
         if (e->body[0]) {
             lv_obj_t *b = lv_label_create(card);
             lv_label_set_text(b, e->body);
+            lv_obj_set_width(b, LV_PCT(100));
             lv_obj_set_style_text_font(b, &lv_font_montserrat_10, 0);
             lv_obj_set_style_text_color(b, lv_color_hex(0x888899), 0);
             lv_label_set_long_mode(b, LV_LABEL_LONG_DOT);
-            lv_obj_set_width(b, LV_PCT(100));
         }
     }
 }

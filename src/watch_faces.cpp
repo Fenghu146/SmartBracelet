@@ -4,11 +4,6 @@
 #include <math.h>
 #include <stdio.h>
 
-#ifndef LCD_WIDTH
-#define LCD_WIDTH 240
-#define LCD_HEIGHT 284
-#endif
-
 static const int CX = 120, CY = 142;
 
 static lv_obj_t *sf_time_label = nullptr;
