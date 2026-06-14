@@ -30,7 +30,6 @@
 #include "settings_page.h"
 #include "nvs_store.h"
 #include "motion_intensity.h"
-#include "sleep_tracker.h"
 #include "ui_styles.h"
 #include "debug_log.h"
 #include "sensor_task.h"
@@ -167,9 +166,9 @@ static void fill_telemetry(ui_telemetry_t *t) {
     RTC_DateTime dt = rtc.getDateTime();
     t->hour = dt.hour; t->minute = dt.minute; t->second = dt.second;
     t->day = dt.day; t->month = dt.month; t->year = dt.year; t->week = dt.week;
-    t->batt_percent = read_batt_percent_raw();
     t->batt_mv = read_batt_voltage_raw();
-    t->batt_valid = batt_is_valid();
+    t->batt_valid = (t->batt_mv >= 500 && t->batt_mv <= 5000);
+    t->batt_percent = read_batt_percent_raw();
     xpowers_chg_status_t cs = pmu.getChargerStatus();
     t->charging = is_charging(cs);
     t->usb_powered = pmu.isVbusIn();
@@ -183,9 +182,6 @@ static void fill_telemetry(ui_telemetry_t *t) {
     t->intensity = motion_intensity_get();
     t->mets = motion_intensity_get_mets();
     t->calories = motion_intensity_get_calories();
-    t->sleeping = sleep_tracker_is_sleeping();
-    t->sleep_total_min = sleep_tracker_get_total_minutes();
-    t->sleep_deep_min = sleep_tracker_get_deep_minutes();
 }
 
 // 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲锟?
@@ -228,7 +224,6 @@ static void setup_modules(void) {
     step_counter_init();
     wrist_detect_init();
     motion_intensity_init();
-    sleep_tracker_init();
     notif_history_init();
     batt_health_init();
     quick_panel_init();
@@ -439,8 +434,11 @@ static void handle_fall_alert(void) {
         set_backlight(true);
         ble_srv_send("ALERT:FALL_DETECTED");
         strncpy(ble_notification.app_id, "FALL", sizeof(ble_notification.app_id));
+        ble_notification.app_id[sizeof(ble_notification.app_id) - 1] = '\0';
         strncpy(ble_notification.title, "Fall Detected!", sizeof(ble_notification.title));
+        ble_notification.title[sizeof(ble_notification.title) - 1] = '\0';
         strncpy(ble_notification.body, "Press to dismiss", sizeof(ble_notification.body));
+        ble_notification.body[sizeof(ble_notification.body) - 1] = '\0';
         ble_notification.has_new = 1;
         current_page = FALL_NOTIFY_PAGE;
         lv_scr_load_anim(pages[FALL_NOTIFY_PAGE], LV_SCR_LOAD_ANIM_MOVE_TOP, FALL_PAGE_ANIM_MS, 0, false);
@@ -469,8 +467,6 @@ static void update_ui_pages(const ui_telemetry_t *telem) {
 
 // -- BLE telemetry push + NVS save + battery health --
 static void push_ble_telemetry(const ui_telemetry_t *telem) {
-    sleep_tracker_update(telem->intensity, telem->hour, telem->minute);
-
     int act = activity_get_current();
     if (act != current_activity) {
         current_activity = act;
@@ -520,7 +516,6 @@ static void loop_telemetry(void) {
         if (nvs_check_daily_reset(telem.day)) {
             step_counter_reset();
             motion_intensity_reset_calories();
-            sleep_tracker_reset();
         }
 
         update_ui_pages(&telem);

@@ -77,7 +77,7 @@ static void ota_download_task(void *param) {
     ota_state = OTA_WRITING;
     WiFiClient *stream = http.getStreamPtr();
 
-    uint8_t buf[4096];
+    uint8_t buf[1024];
     ota_written = 0;
 
     while (ota_written < ota_total_size) {
