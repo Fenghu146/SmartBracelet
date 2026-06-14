@@ -15,7 +15,6 @@
 #include "service/ble_srv.h"
 #include "stopwatch.h"
 #include "weather.h"
-#include "activity.h"
 #include "player.h"
 #include "service/tf_card.h"
 #include "service/audio.h"
@@ -70,9 +69,6 @@ static unsigned long last_activity_time = 0;
 static const unsigned long DISPLAY_TIMEOUT_MS = 10000;
 static const unsigned long DEEP_SLEEP_TIMEOUT_MS = 30000;
 
-// 鈹€鈹€ Activity state 鈹€鈹€
-static int current_activity = -1;
-
 // -- Watch face --
 static int current_face = 0;
 static lv_obj_t *sport_page = nullptr;
@@ -88,7 +84,6 @@ static lv_obj_t *sport_page = nullptr;
 #define TICK_INTERVAL_ON_MS     1000
 #define TICK_INTERVAL_OFF_MS    5000
 #define NVS_SAVE_INTERVAL_MS    60000
-#define IMU_FEATURE_INTERVAL_MS 5000
 #define NTP_RESYNC_INTERVAL_MS  3600000
 #define WIFI_POWER_OFF_DELAY_MS 30000
 #define PMU_SETTLE_DELAY_MS     200
@@ -200,7 +195,7 @@ static void setup_display(void) {
         while (true) delay(100);
     }
 
-    gfx->fillScreen(DISPLAY_TEST_BLUE);
+    gfx->fillScreen(0x0000);
     delay(100);
 
     // Clear physical rows 0-19 and 304-319 (outside LVGL space)
@@ -453,7 +448,6 @@ static void update_ui_pages(const ui_telemetry_t *telem) {
         if (current_page == PAGE_SENSOR) ui_update_sensor_page(telem);
         if (current_page == PAGE_NOTIF) ui_update_notif_page();
         if (current_page == PAGE_WEATHER) weather_update();
-        if (current_page == PAGE_ACTIVITY) activity_update();
         if (current_page == PAGE_PLAYER) player_update();
         if (current_page == PAGE_VOICE) voice_chat_page_update();
         if (current_page == PAGE_SETTINGS) settings_page_update();
@@ -467,11 +461,6 @@ static void update_ui_pages(const ui_telemetry_t *telem) {
 
 // -- BLE telemetry push + NVS save + battery health --
 static void push_ble_telemetry(const ui_telemetry_t *telem) {
-    int act = activity_get_current();
-    if (act != current_activity) {
-        current_activity = act;
-        ble_srv_update_activity(act >= 0 ? (uint8_t)act : 2);
-    }
     ble_srv_update_steps(step_counter_get());
 
     // Periodically save steps to NVS (every 60s)
@@ -491,16 +480,6 @@ static void push_ble_telemetry(const ui_telemetry_t *telem) {
 
     // Battery health tracking (reuse cached charging state & voltage)
     batt_health_update(telem->charging, telem->batt_mv);
-
-    // Push IMU features for AI co-inference (every 5s)
-    {
-        static unsigned long last_feat_time = 0;
-        if (millis() - last_feat_time > IMU_FEATURE_INTERVAL_MS) {
-            last_feat_time = millis();
-            const float *feat = activity_get_features();
-            if (feat) ble_srv_update_imu_features(feat, 12);
-        }
-    }
 }
 
 static void loop_telemetry(void) {
