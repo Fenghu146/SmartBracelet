@@ -43,13 +43,35 @@ els.btnScan.addEventListener('click', async () => {
 
 async function _connectWebBluetooth() {
   els.connectStatus.textContent = 'Opening device selector...';
+  els.btnScan.disabled = true;
   try {
-    await ble.connect();
-    const data = await ble.readAll();
-    Object.assign(watchData, data);
+    // Overall timeout: 45s for the entire connection flow
+    const overallTimeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Connection timed out (45s). Please try again.')), 45000)
+    );
+
+    const connectFlow = (async () => {
+      await ble.connect(undefined, (msg) => {
+        els.connectStatus.textContent = msg;
+      });
+
+      els.connectStatus.textContent = 'Reading data...';
+      try {
+        const data = await ble.readAll();
+        Object.assign(watchData, data);
+      } catch (readErr) {
+        console.warn('[BLE] readAll failed, entering dashboard anyway:', readErr.message);
+      }
+    })();
+
+    await Promise.race([connectFlow, overallTimeout]);
     showDashboard();
     render();
   } catch (e) {
+    // Disconnect on timeout to clean up BLE state
+    if ((e.message || '').includes('timed out')) {
+      try { ble.disconnect(); } catch (_) {}
+    }
     const msg = e.message || String(e);
     if (msg.includes('cancel') || msg.includes('user') || msg.includes('cancelled')) {
       els.connectStatus.textContent = 'Selection cancelled. Click Scan to try again.';
@@ -189,22 +211,39 @@ function showDashboard() {
   sendLocationToWatch();
 }
 
-// Send phone GPS location to watch via BLE
-function sendLocationToWatch() {
-  if (!navigator.geolocation || !ble.isConnected) return;
+// Send phone GPS location to watch via BLE (with retry)
+let locationSent = false;
+function sendLocationToWatch(retryCount) {
+  if (typeof retryCount === 'undefined') retryCount = 0;
+  if (locationSent || !ble.isConnected) return;
+  if (!navigator.geolocation) {
+    console.warn('Geolocation not supported');
+    return;
+  }
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
       try {
         const lat = pos.coords.latitude.toFixed(4);
         const lon = pos.coords.longitude.toFixed(4);
         await ble.sendLocation(lat, lon);
+        locationSent = true;
         console.log(`Location sent: ${lat}, ${lon}`);
       } catch (e) {
         console.warn('Failed to send location:', e.message);
+        // Retry once after 3s if still connected
+        if (retryCount < 1 && ble.isConnected) {
+          setTimeout(() => sendLocationToWatch(retryCount + 1), 3000);
+        }
       }
     },
-    (err) => { console.warn('Geolocation error:', err.message); },
-    { timeout: 10000, maximumAge: 300000 }  // 5 min cache
+    (err) => {
+      console.warn('Geolocation error:', err.message);
+      // Retry once after 5s (user may grant permission on retry)
+      if (retryCount < 1 && ble.isConnected) {
+        setTimeout(() => sendLocationToWatch(retryCount + 1), 5000);
+      }
+    },
+    { timeout: 15000, maximumAge: 300000, enableHighAccuracy: false }  // 5 min cache, low accuracy OK
   );
 }
 

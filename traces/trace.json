@@ -1,0 +1,54 @@
+{
+  "id": "smartbracelet-build",
+  "title": "SmartBracelet Firmware Build Pipeline",
+  "description": "End-to-end build and validation pipeline for ESP32-S3 smart watch firmware",
+  "version": "1.0.0",
+  "steps": {
+    "scan": {
+      "name": "Code Scan",
+      "does": "Scan source files and build knowledge graph",
+      "from_steps": [],
+      "assets": ["graph.db"]
+    },
+    "lint": {
+      "name": "Static Lint",
+      "does": "Run architecture guard checks and code smells",
+      "from_steps": ["scan"],
+      "assets": ["lint-report.json"]
+    },
+    "compile": {
+      "name": "Compile Firmware",
+      "does": "Build ESP32-S3 firmware with PlatformIO",
+      "from_steps": ["scan"],
+      "assets": ["firmware.bin"]
+    },
+    "analyze": {
+      "name": "Hotspot Analysis",
+      "does": "Identify high-complexity functions and coupling issues",
+      "from_steps": ["scan"],
+      "assets": ["hotspots.json"]
+    },
+    "refactor": {
+      "name": "Refactor",
+      "does": "Execute code refactoring based on analysis results",
+      "from_steps": ["analyze", "lint"],
+      "assets": []
+    },
+    "verify": {
+      "name": "Verify Changes",
+      "does": "Recompile and run guard checks after refactoring",
+      "from_steps": ["refactor", "compile"],
+      "assets": ["verify-report.json"]
+    },
+    "flash": {
+      "name": "Flash Device",
+      "does": "Upload firmware to ESP32-S3 via serial",
+      "from_steps": ["verify"],
+      "assets": []
+    }
+  },
+  "deliverable": {
+    "description": "Verified firmware flashed to SmartBracelet device",
+    "assets": ["firmware.bin", "verify-report.json"]
+  }
+}

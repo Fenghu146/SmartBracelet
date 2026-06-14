@@ -147,14 +147,17 @@ class NotifyCallback : public BLECharacteristicCallbacks
         int p2 = val.find('|', p1 + 1);
         if (p1 > 0 && p1 < 16) {
             strncpy(ble_notification.app_id, val.substr(0, p1).c_str(), 15);
+            ble_notification.app_id[15] = '\0';
         }
         if (p2 > p1 && p2 - p1 - 1 < 64) {
             strncpy(ble_notification.title,
                 val.substr(p1 + 1, p2 - p1 - 1).c_str(), 63);
+            ble_notification.title[63] = '\0';
         }
         if (p2 > 0 && val.length() - p2 - 1 < 128) {
             strncpy(ble_notification.body,
                 val.substr(p2 + 1).c_str(), 127);
+            ble_notification.body[127] = '\0';
         }
 
         USBSerial.printf("BLE notify: %s | %s | %s\n",
@@ -229,7 +232,7 @@ static void setup_notification_service(BLEServer *server)
     svc->start();
 }
 
-// 鈹€鈹€ Data service: watch �?phone telemetry 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// 閳光偓閳光偓 Data service: watch 閳?phone telemetry 閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓
 static void setup_data_service(BLEServer *server)
 {
     BLEService *svc = server->createService(
@@ -265,7 +268,7 @@ static void setup_data_service(BLEServer *server)
     LOG_INFO("BLE: DataService started");
 }
 
-// 鈹€鈹€ OTA service: phone triggers firmware update 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// 閳光偓閳光偓 OTA service: phone triggers firmware update 閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓
 static void setup_ota_service(BLEServer *server)
 {
     BLEService *svc = server->createService(BLEUUID(OTA_SERVICE_UUID));
@@ -367,7 +370,7 @@ void ble_srv_send(const char *data)
     }
 }
 
-// 鈹€鈹€ Data service updates 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// 閳光偓閳光偓 Data service updates 閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓
 void ble_srv_update_steps(uint32_t steps)
 {
     if (!pStepChar) return;

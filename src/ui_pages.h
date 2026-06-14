@@ -8,6 +8,22 @@
 // Forward declarations
 struct CST816S;
 
+// Page index enum - replaces magic numbers throughout codebase
+enum PageIndex {
+    PAGE_DIGITAL = 0,
+    PAGE_ANALOG,
+    PAGE_SENSOR,
+    PAGE_NOTIF,
+    PAGE_STOPWATCH,
+    PAGE_WEATHER,
+    PAGE_ACTIVITY,
+    PAGE_PLAYER,
+    PAGE_VOICE,
+    PAGE_MUSIC,
+    PAGE_SETTINGS,
+    PAGE_COUNT
+};
+
 // Telemetry struct for passing hardware state to UI
 typedef struct {
     int hour, minute, second, day, month, year, week;

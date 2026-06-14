@@ -7,6 +7,15 @@
         "serve",
         "--mcp"
       ]
+    },
+    "codeatlas": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "c:\\Users\\35015\\Desktop\\Group\\codeatlas\\packages\\mcp-server\\dist\\server.js",
+        "--project",
+        "."
+      ]
     }
   }
 }

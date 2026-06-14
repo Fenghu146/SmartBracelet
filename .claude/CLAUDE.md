@@ -1,34 +1,31 @@
-<!-- CODEGRAPH_START -->
-## CodeGraph
+## CodeAtlas
 
-This project has a CodeGraph MCP server (`codegraph_*` tools) configured. CodeGraph is a tree-sitter-parsed knowledge graph of every symbol, edge, and file. Reads are sub-millisecond and return structural information grep cannot.
+**CodeAtlas** (`rtk codeatlas`) — AST 级代码结构索引，tree-sitter 解析，替代 CodeGraph。
 
-### When to prefer codegraph over native search
+### 架构概览 (2026-06-10)
 
-Use codegraph for **structural** questions — what calls what, what would break, where is X defined, what is X's signature. Use native grep/read only for **literal text** queries (string contents, comments, log messages) or after you already have a specific file open.
+```
+📊 619 symbols, 329 relationships, 340 files
+🔵 INTERFACE (1 symbol)  — showConnectScreen
+🟢 BUSINESS (614 symbols) — 核心业务逻辑
+⚪ UTILITY (4 symbols)  — helpers/utils
+```
 
-| Question | Tool |
-|---|---|
-| "Where is X defined?" / "Find symbol named X" | `codegraph_search` |
-| "What calls function Y?" | `codegraph_callers` |
-| "What does Y call?" | `codegraph_callees` |
-| "What would break if I changed Z?" | `codegraph_impact` |
-| "Show me Y's signature / source / docstring" | `codegraph_node` |
-| "Give me focused context for a task/area" | `codegraph_context` |
-| "See several related symbols' source at once" | `codegraph_explore` |
-| "What files exist under path/" | `codegraph_files` |
-| "Is the index healthy?" | `codegraph_status` |
+### 常用命令
+
+| 命令 | 用途 |
+|------|------|
+| `rtk codeatlas scan . --full` | 全量扫描，构建索引 |
+| `rtk codeatlas scan .` | 增量扫描（~50-100ms） |
+| `rtk codeatlas search "<name>"` | 按名称搜索符号 |
+| `rtk codeatlas info <symbol>` | 查看符号详情（签名、源码、层级） |
+| `rtk codeatlas callers <symbol>` | 查找调用者 |
+| `rtk codeatlas callees <symbol>` | 查找被调用者 |
+| `rtk codeatlas impact <symbol>` | 影响分析 |
+| `rtk codeatlas layers` | 架构分层概览 |
 
 ### Rules of thumb
 
-- **Answer directly — don't delegate exploration.** For "how does X work" / architecture / trace questions, answer with 2-3 codegraph calls: `codegraph_context` first, then ONE `codegraph_explore` for the source of the symbols it surfaces. Codegraph IS the pre-built index, so spawning a separate file-reading sub-task/agent — or running a grep + read loop — repeats work codegraph already did and costs more for the same answer.
-- **Trust codegraph results.** They come from a full AST parse. Do NOT re-verify them with grep — that's slower, less accurate, and wastes context.
-- **Don't grep first** when looking up a symbol by name. `codegraph_search` is faster and returns kind + location + signature in one call.
-- **Don't chain `codegraph_search` + `codegraph_node`** when you just want context — `codegraph_context` is one call.
-- **Don't loop `codegraph_node` over many symbols** — one `codegraph_explore` call returns several symbols' source grouped in a single capped call, while each separate node/Read call re-reads the whole context and costs far more.
-- **Index lag**: the file watcher debounces ~500ms behind writes; don't re-query immediately after editing a file in the same turn.
-
-### If `.codegraph/` doesn't exist
-
-The MCP server returns "not initialized." Ask the user: *"I notice this project doesn't have CodeGraph initialized. Want me to run `codegraph init -i` to build the index?"*
-<!-- CODEGRAPH_END -->
+- **直接用 codeatlas，不要 grep 先行。** AST 级解析比文本搜索更准确。
+- **信任 codeatlas 结果。** 它基于 tree-sitter 解析，不需要用 grep 二次验证。
+- **增量扫描很快（<100ms）。** 编辑文件后可随时更新索引。

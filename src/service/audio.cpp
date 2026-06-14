@@ -3,6 +3,7 @@
 
 #include "audio.h"
 #include "pin_config.h"
+#include "../debug_log.h"
 #include <Arduino.h>
 #include <math.h>
 #include <Wire.h>
@@ -28,12 +29,12 @@ static bool pca9557_write(uint8_t reg, uint8_t val) {
 static bool pca9557_init(void) {
   // Set IO0/IO1/IO2 as outputs (0=output), others as inputs (1=input)
   if (!pca9557_write(PCA9557_CONFIG, 0xF8)) {
-    USBSerial.println("PCA9557: no response");
+    LOG_ERR("PCA9557: no response");
     return false;
   }
   // Set initial output: LCD_CS=1(high), PA_EN=1(high), DVP_PWDN=1(high)
   pca9557_write(PCA9557_OUTPUT, 0x07);
-  USBSerial.println("PCA9557: PA_EN enabled");
+  LOG_INFO("PCA9557: PA_EN enabled");
   return true;
 }
 
@@ -48,8 +49,8 @@ static bool pca9557_init(void) {
 #define ES8311_CLK6     0x06  // BCLK config
 #define ES8311_CLK7     0x07  // LRCK divider HI + tri-state
 #define ES8311_CLK8     0x08  // LRCK divider LO
-#define ES8311_SDP_IN   0x09  // USBSerial data port input (I2S format)
-#define ES8311_SDP_OUT  0x0A  // USBSerial data port output
+#define ES8311_SDP_IN   0x09  // Serial data port input (I2S format)
+#define ES8311_SDP_OUT  0x0A  // Serial data port output
 #define ES8311_PWR_A    0x0B  // power up sequence A
 #define ES8311_PWR_B    0x0C  // power up sequence B
 #define ES8311_PWR_C    0x0D  // power up sequence C
@@ -78,7 +79,7 @@ static bool es8311_write(uint8_t reg, uint8_t val) {
 static bool es8311_init(void) {
   // 1. Reset
   if (!es8311_write(ES8311_RESET, 0x1F)) {
-    USBSerial.println("ES8311: I2C no response");
+    LOG_ERR("ES8311: I2C no response");
     return false;
   }
   delay(10);
@@ -109,7 +110,7 @@ static bool es8311_init(void) {
   es8311_write(ES8311_VOLT, 0x7F);  // internal voltage
 
   // 6. Output routing: line out (not headphone amp)
-  es8311_write(ES8311_OUT, 0x00);   // HPSW=0 â†?line output mode
+  es8311_write(ES8311_OUT, 0x00);   // HPSW=0 éˆ«?line output mode
 
   // 7. Start state machine
   es8311_write(ES8311_RESET, 0x80); // CSM_ON=1 (slave mode)
@@ -119,7 +120,7 @@ static bool es8311_init(void) {
   es8311_write(ES8311_DAC_MISC, 0x08);  // default
   es8311_write(ES8311_DAC_VOL,  0xBF);  // 0dB
 
-  USBSerial.println("ES8311: OK");
+  LOG_INFO("ES8311: OK");
   return true;
 }
 
@@ -146,10 +147,10 @@ static bool i2s_init_tx(void) {
 
   esp_err_t err;
   err = i2s_driver_install(I2S_NUM_0, &cfg, 0, NULL);
-  if (err != ESP_OK) { USBSerial.printf("I2S: install err %d\n", err); return false; }
+  if (err != ESP_OK) { LOG_ERR("I2S: install err %d", err); return false; }
   err = i2s_set_pin(I2S_NUM_0, &pins);
-  if (err != ESP_OK) { USBSerial.printf("I2S: pin err %d\n", err); return false; }
-  USBSerial.println("I2S: OK");
+  if (err != ESP_OK) { LOG_ERR("I2S: pin err %d", err); return false; }
+  LOG_INFO("I2S TX: OK");
   return true;
 }
 
@@ -212,13 +213,13 @@ bool audio_init_rx(void) {
 
   esp_err_t err;
   err = i2s_driver_install(I2S_NUM_1, &cfg, 0, NULL);
-  if (err != ESP_OK) { USBSerial.printf("I2S_RX: install err %d\n", err); return false; }
+  if (err != ESP_OK) { LOG_ERR("I2S_RX: install err %d", err); return false; }
   err = i2s_set_pin(I2S_NUM_1, &pins);
-  if (err != ESP_OK) { USBSerial.printf("I2S_RX: pin err %d\n", err); return false; }
+  if (err != ESP_OK) { LOG_ERR("I2S_RX: pin err %d", err); return false; }
   i2s_stop(I2S_NUM_1);  // install but don't start yet
 
   rx_queue = xQueueCreate(8, sizeof(int16_t *));
-  USBSerial.println("I2S_RX: INMP441 ready");
+  LOG_INFO("I2S_RX: INMP441 ready");
   return true;
 }
 
@@ -231,7 +232,7 @@ bool audio_start_recording(void) {
   rx_recording = true;
   i2s_start(I2S_NUM_1);
   xTaskCreatePinnedToCore(voice_rx_task, "voice_rx", 4096, NULL, 3, &rx_task_handle, 1);
-  USBSerial.println("Recording...");
+  LOG_INFO("Recording started");
   return true;
 }
 
@@ -241,7 +242,7 @@ void audio_stop_recording(void) {
   // Wait for task to exit
   int wait = 20;
   while (rx_task_handle && wait-- > 0) vTaskDelay(pdMS_TO_TICKS(10));
-  USBSerial.println("Recording stopped");
+  LOG_INFO("Recording stopped");
 }
 
 int audio_read_chunk(int16_t *buf, int max_samples) {
@@ -262,33 +263,39 @@ bool audio_is_recording(void) { return rx_recording; }
 bool audio_init(void) {
   // Enable amplifier via PCA9557 first
   if (!pca9557_init()) {
-    USBSerial.println("Audio: PCA9557 init FAILED, amp may be off");
+    LOG_WARN("Audio: PCA9557 init FAILED, amp may be off");
   }
 
   if (!es8311_init()) {
-    USBSerial.println("Audio: ES8311 init FAILED");
+    LOG_ERR("Audio: ES8311 init FAILED");
     return false;
   }
   if (!i2s_init_tx()) {
-    USBSerial.println("Audio: I2S init FAILED");
+    LOG_ERR("Audio: I2S init FAILED");
     return false;
   }
 
-  USBSerial.println("Audio: ready");
-  USBSerial.println("Audio: beep...");
+  LOG_INFO("Audio: ready");
+  LOG_INFO("Audio: beep...");
   audio_set_volume(100);
   audio_play_sine(500, 15000);
   return true;
 }
 
 bool audio_play_sine(int freq_hz, int duration_ms) {
-  int total = (44100 * duration_ms) / 1000;
-  int16_t *buf = (int16_t *)malloc(total * sizeof(int16_t));
+  const int CHUNK = 1024;
+  int16_t *buf = (int16_t *)malloc(CHUNK * sizeof(int16_t));
   if (!buf) return false;
-  for (int i = 0; i < total; i++)
-    buf[i] = (int16_t)(sinf(2.0f * M_PI * freq_hz * i / 44100.0f) * 20000.0f);
-  size_t written;
-  i2s_write(I2S_NUM_0, buf, total * sizeof(int16_t), &written, portMAX_DELAY);
+  int total = (44100 * duration_ms) / 1000;
+  int written_total = 0;
+  while (written_total < total) {
+    int n = (total - written_total > CHUNK) ? CHUNK : (total - written_total);
+    for (int i = 0; i < n; i++)
+      buf[i] = (int16_t)(sinf(2.0f * M_PI * freq_hz * (written_total + i) / 44100.0f) * 20000.0f);
+    size_t written;
+    i2s_write(I2S_NUM_0, buf, n * sizeof(int16_t), &written, portMAX_DELAY);
+    written_total += n;
+  }
   free(buf);
   return true;
 }
@@ -316,20 +323,26 @@ bool audio_play_wav(const char *path) {
 static void play_wav_task(void *param) {
   char *path = (char *)param;
   File f = SD_MMC.open(path);
-  if (!f) { free(path); playing = false; vTaskDelete(NULL); return; }
-  USBSerial.printf("Playing: %s\n", path);
+  if (!f) {
+    LOG_ERR("Audio: cannot open %s", path);
+    free(path); playing = false; vTaskDelete(NULL); return;
+  }
+  LOG_INFO("Playing: %s", path);
   free(path);
 
   WavHeader hdr;
   size_t nr = f.read((uint8_t*)&hdr, sizeof(hdr));
   if (nr != sizeof(hdr) || memcmp(hdr.riff, "RIFF", 4) != 0 || memcmp(hdr.wave, "WAVE", 4) != 0) {
-    USBSerial.println("Audio: invalid WAV");
+    LOG_ERR("Audio: invalid WAV header");
     f.close(); playing = false; vTaskDelete(NULL); return;
   }
 
   i2s_set_sample_rates(I2S_NUM_0, hdr.sample_rate);
   uint8_t *buf = (uint8_t *)malloc(1024);
-  if (!buf) { f.close(); playing = false; vTaskDelete(NULL); return; }
+  if (!buf) {
+    LOG_ERR("Audio: malloc failed for playback buffer");
+    f.close(); playing = false; vTaskDelete(NULL); return;
+  }
 
   while (playing && f.available()) {
     int n = f.read(buf, 1024);
@@ -337,9 +350,11 @@ static void play_wav_task(void *param) {
     size_t written;
     i2s_write(I2S_NUM_0, buf, n, &written, portMAX_DELAY);
   }
-  free(buf); f.close();
+  free(buf);
+  f.close();
+  i2s_set_sample_rates(I2S_NUM_0, 44100);  // restore default
   playing = false;
-  USBSerial.println("Playback done");
+  LOG_INFO("Playback done");
   vTaskDelete(NULL);
 }
 

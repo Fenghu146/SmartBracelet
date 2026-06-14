@@ -1,0 +1,38 @@
+{
+  "name": "Build #42 — Post-Refactor Verification",
+  "started_at": "2025-01-15T10:30:00Z",
+  "steps": {
+    "scan": {
+      "status": { "kind": "done", "message": "62 files, 414 symbols, 444 relationships" },
+      "assets": ["graph.db"]
+    },
+    "lint": {
+      "status": { "kind": "done", "message": "1 warning: LOG_INFO has 32 callers (high coupling)" },
+      "assets": ["lint-report.json"]
+    },
+    "compile": {
+      "status": { "kind": "done", "message": "RAM 47.5%, Flash 62.7%" },
+      "assets": ["firmware.bin"]
+    },
+    "analyze": {
+      "status": { "kind": "done", "message": "Top hotspot: loop_telemetry (37 callees)" },
+      "assets": ["hotspots.json"]
+    },
+    "refactor": {
+      "status": { "kind": "done", "message": "Extracted backlight.cpp, split loop() into 4 sub-functions" },
+      "assets": []
+    },
+    "verify": {
+      "status": { "kind": "running", "message": "Recompiling after refactoring..." },
+      "assets": []
+    },
+    "flash": {
+      "status": { "kind": "blocked", "message": "Waiting for verify step" },
+      "assets": []
+    }
+  },
+  "deliverable": {
+    "status": { "kind": "idle" },
+    "assets": []
+  }
+}

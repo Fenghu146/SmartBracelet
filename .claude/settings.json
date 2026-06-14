@@ -1,13 +1,20 @@
 {
   "permissions": {
     "allow": [
-      "mcp__codegraph__codegraph_search",
-      "mcp__codegraph__codegraph_context",
-      "mcp__codegraph__codegraph_callers",
-      "mcp__codegraph__codegraph_callees",
-      "mcp__codegraph__codegraph_impact",
-      "mcp__codegraph__codegraph_node",
-      "mcp__codegraph__codegraph_status"
+      "mcp__codeatlas__codeatlas_search",
+      "mcp__codeatlas__codeatlas_context",
+      "mcp__codeatlas__codeatlas_callers",
+      "mcp__codeatlas__codeatlas_callees",
+      "mcp__codeatlas__codeatlas_impact",
+      "mcp__codeatlas__codeatlas_node",
+      "mcp__codeatlas__codeatlas_status",
+      "mcp__codeatlas__codeatlas_scan",
+      "mcp__codeatlas__codeatlas_layers",
+      "mcp__codeatlas__codeatlas_changes",
+      "mcp__codeatlas__codeatlas_graph",
+      "mcp__codeatlas__codeatlas_hotspots",
+      "mcp__codeatlas__codeatlas_review",
+      "mcp__codeatlas__codeatlas_explain"
     ]
   }
 }

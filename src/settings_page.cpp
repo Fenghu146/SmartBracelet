@@ -20,6 +20,14 @@ static int step_goal = 8000;
 static int brightness = 100;
 static bool dnd_on = false;
 
+// Cached values for update comparison (avoid NVS reads on every tick)
+static int cached_step_goal = -1;
+static int cached_brightness = -1;
+static bool cached_dnd_on = false;
+static int cached_watch_face = -1;
+static int cached_batt_pct = -1;
+static int cached_batt_cycles = -1;
+
 static void on_goal_minus(lv_event_t *e) {
     step_goal -= 500;
     if (step_goal < 1000) step_goal = 1000;
@@ -204,16 +212,37 @@ lv_obj_t* settings_page_create(void) {
 }
 
 void settings_page_update(void) {
-    // Refresh displayed values in case settings changed externally
-    if (goal_label)
-        lv_label_set_text_fmt(goal_label, "Goal: %d", nvs_get_step_goal());
-    if (bright_label)
-        lv_label_set_text_fmt(bright_label, "Bright: %d%%", nvs_get_brightness());
-    if (face_label)
-        lv_label_set_text_fmt(face_label, "Face: %s", watch_face_name(nvs_get_watch_face()));
-    if (batt_health_label)
-        lv_label_set_text_fmt(batt_health_label, "Batt: %d%% (%d cyc)",
-            batt_health_get_percent(), batt_health_get_cycles());
+    // Only update labels when cached values differ from current NVS values
+    int sg = nvs_get_step_goal();
+    if (sg != cached_step_goal) {
+        cached_step_goal = sg;
+        if (goal_label)
+            lv_label_set_text_fmt(goal_label, "Goal: %d", sg);
+    }
+
+    int br = nvs_get_brightness();
+    if (br != cached_brightness) {
+        cached_brightness = br;
+        if (bright_label)
+            lv_label_set_text_fmt(bright_label, "Bright: %d%%", br);
+    }
+
+    int wf = nvs_get_watch_face();
+    if (wf != cached_watch_face) {
+        cached_watch_face = wf;
+        if (face_label)
+            lv_label_set_text_fmt(face_label, "Face: %s", watch_face_name(wf));
+    }
+
+    int bp = batt_health_get_percent();
+    int bc = batt_health_get_cycles();
+    if (bp != cached_batt_pct || bc != cached_batt_cycles) {
+        cached_batt_pct = bp;
+        cached_batt_cycles = bc;
+        if (batt_health_label)
+            lv_label_set_text_fmt(batt_health_label, "Batt: %d%% (%d cyc)", bp, bc);
+    }
+
     if (version_label)
         lv_label_set_text_fmt(version_label, "FW: %s", FIRMWARE_VERSION);
 }

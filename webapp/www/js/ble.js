@@ -79,9 +79,19 @@ class BleService {
     this._capListeners = [];
   }
 
+  // ── Timeout helper ──
+  _timeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`BLE timeout: ${label}`)), ms)),
+    ]);
+  }
+
   // ── Web Bluetooth: requestDevice shows system picker ──
-  async connectWeb() {
+  async connectWeb(onProgress) {
+    const progress = onProgress || (() => {});
     console.log('[BLE] Web: requesting device (no filter, shows all nearby BLE devices)...');
+    progress('Select your watch from the list...');
     this.device = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
       optionalServices: [
@@ -98,19 +108,23 @@ class BleService {
       if (this.onDisconnected) this.onDisconnected();
     });
 
-    this.server = await this.device.gatt.connect();
+    progress('Connecting...');
+    this.server = await this._timeout(this.device.gatt.connect(), 10000, 'gatt.connect');
     this.connected = true;
     this.deviceId = this.device.id;
 
-    // Discover characteristics
+    // Discover characteristics (each with 5s timeout)
+    progress('Discovering services...');
     await this._webDiscover(UUID.DATA_SERVICE, UUID.STEPS_CHAR, 'steps');
     await this._webDiscover(UUID.DATA_SERVICE, UUID.BATT_RAW_CHAR, 'battRaw');
     await this._webDiscover(UUID.DATA_SERVICE, UUID.ACTIVITY_CHAR, 'activity');
     await this._webDiscover(UUID.BATTERY_SERVICE, UUID.BATTERY_LEVEL, 'battLevel');
     await this._webDiscover(UUID.NOTIFY_SERVICE, UUID.NOTIFY_RX_CHAR, 'notifyRx');
     await this._webDiscover(UUID.NOTIFY_SERVICE, UUID.NOTIFY_TX_CHAR, 'notifyTx');
+    console.log('[BLE] Discovered chars:', Object.keys(this.chars));
 
     // Subscribe to notifications
+    progress('Subscribing to notifications...');
     await this._webNotify('steps', dv => {
       if (this.onStepsChanged) this.onStepsChanged(dv.getUint32(0, true));
     });
@@ -125,13 +139,14 @@ class BleService {
       if (this.onAckReceived) this.onAckReceived(text);
     });
 
-    await this._syncTimeWeb();
+    progress('Syncing time...');
+    try { await this._timeout(this._syncTimeWeb(), 5000, 'timeSync'); } catch (e) { console.warn('[BLE] Time sync skipped:', e.message); }
   }
 
   async _webDiscover(svcUUID, charUUID, name) {
     try {
-      const svc = await this.server.getPrimaryService(svcUUID);
-      this.chars[name] = await svc.getCharacteristic(charUUID);
+      const svc = await this._timeout(this.server.getPrimaryService(svcUUID), 5000, `svc:${name}`);
+      this.chars[name] = await this._timeout(svc.getCharacteristic(charUUID), 5000, `char:${name}`);
     } catch (e) { console.warn(`[BLE] Char ${name} not found:`, e.message); }
   }
 
@@ -139,7 +154,7 @@ class BleService {
     const ch = this.chars[name];
     if (!ch) return;
     ch.addEventListener('characteristicvaluechanged', e => cb(e.target.value));
-    try { await ch.startNotifications(); } catch (e) { console.warn(`[BLE] Notify ${name} fail:`, e.message); }
+    try { await this._timeout(ch.startNotifications(), 5000, `notify:${name}`); } catch (e) { console.warn(`[BLE] Notify ${name} fail:`, e.message); }
   }
 
   async readAllWeb() {
@@ -258,9 +273,9 @@ class BleService {
   // ── Unified API ──
   get isConnected() { return this.connected; }
 
-  async connect(deviceId) {
+  async connect(deviceId, onProgress) {
     if (isNative) return this.connectCapacitor(deviceId);
-    return this.connectWeb();
+    return this.connectWeb(onProgress);
   }
   async readAll() { return isNative ? this.readAllCap() : this.readAllWeb(); }
   async sendNotification(a, t, b) { return isNative ? this.sendNotificationCap(a,t,b) : this.sendNotificationWeb(a,t,b); }
