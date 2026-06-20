@@ -41,6 +41,15 @@
 #include <esp_sleep.h>
 #include <esp_system.h>
 
+// -- BOOT button (GPIO0, active LOW) --
+#define BOOT_BTN 0
+static volatile bool boot_btn_pressed = false;
+static unsigned long boot_press_time = 0;
+
+static void IRAM_ATTR boot_btn_isr(void *arg) {
+    boot_btn_pressed = true;
+}
+
 // 鈹€鈹€ Hardware globals 鈹€鈹€
 Arduino_DataBus *bus = nullptr;
 Arduino_GFX *gfx = nullptr;
@@ -75,8 +84,6 @@ static lv_obj_t *sport_page = nullptr;
 
 // -- Named constants (replacing magic numbers) --
 #define BAUD_RATE               115200
-#define USB_CONNECT_DELAY_MS    500
-#define DISPLAY_TEST_BLUE       0x001F
 #define LCD_CLEAR_TOP_END       19
 #define LCD_CLEAR_BOT_START     304
 #define LCD_CLEAR_BOT_END       319
@@ -195,9 +202,6 @@ static void setup_display(void) {
         while (true) delay(100);
     }
 
-    gfx->fillScreen(0x0000);
-    delay(100);
-
     // Clear physical rows 0-19 and 304-319 (outside LVGL space)
     bus->beginWrite();
     bus->writeC8D16D16(ST7789_CASET, 0, 239);
@@ -276,6 +280,8 @@ static void setup_system(void) {
         pmu.setPrechargeCurr(XPOWERS_AXP2101_PRECHARGE_200MA);
         pmu.disableTSPinMeasure();
         pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ); pmu.clearIrqStatus();
+        // Enable PWR key IRQs for polling (IRQ pin not connected, poll registers instead)
+        pmu.enableIRQ(XPOWERS_AXP2101_PKEY_SHORT_IRQ | XPOWERS_AXP2101_PKEY_LONG_IRQ);
         pmu.writeRegister(0x12, 0x01);
         int icc = pmu.readRegister(0x62);
         pmu.writeRegister(0x62, icc | 0x80);
@@ -318,7 +324,6 @@ void setup() {
     last_activity_time = millis();
 
     USBSerial.begin(BAUD_RATE);
-    delay(USB_CONNECT_DELAY_MS);
     LOG_INFO("Booting... Firmware: %s", FIRMWARE_VERSION);
 
     Wire.begin(IIC_SDA, IIC_SCL);
@@ -327,9 +332,13 @@ void setup() {
     lv_init();
     lv_port_disp_init();
     ui_styles_init();
+    setup_touch();        // UI pages created here - display shows ASAP
     setup_modules();
-    setup_touch();
     setup_system();
+
+    // BOOT button GPIO interrupt (active LOW, pullup enabled)
+    pinMode(BOOT_BTN, INPUT_PULLUP);
+    attachInterruptArg(digitalPinToInterrupt(BOOT_BTN), boot_btn_isr, NULL, FALLING);
 
     LOG_INFO("Ready");
 }
@@ -545,6 +554,88 @@ static void loop_gesture(void) {
     }
 }
 
+// -- BOOT button handler (GPIO interrupt + debounce) --
+static void loop_boot_button(void) {
+    if (!boot_btn_pressed) return;
+    boot_btn_pressed = false;
+
+    // Simple debounce: ignore if last press was <200ms ago
+    unsigned long now = millis();
+    if (now - boot_press_time < 200) return;
+    boot_press_time = now;
+
+    // Wait for release to detect long press
+    delay(10);
+    bool long_press = false;
+    while (digitalRead(BOOT_BTN) == LOW) {
+        if (millis() - now > 1000) {
+            long_press = true;
+            break;
+        }
+        delay(10);
+    }
+
+    if (long_press) {
+        // Long press: cycle watch face
+        reset_activity_timer();
+        current_face = watch_face_next(current_face);
+        nvs_set_watch_face(current_face);
+        if (current_face == FACE_ANALOG) {
+            lv_scr_load(pages[PAGE_ANALOG]);
+        } else if (current_face == FACE_SPORT) {
+            lv_scr_load(sport_page);
+        } else {
+            lv_scr_load(pages[PAGE_DIGITAL]);
+        }
+        LOG_INFO("BOOT long press: face=%s", watch_face_name(current_face));
+    } else {
+        // Short press: wake screen / toggle backlight
+        reset_activity_timer();
+        if (screen_is_on()) {
+            set_backlight(false);
+        } else {
+            set_backlight(true);
+        }
+        LOG_INFO("BOOT short press: screen=%s", screen_is_on() ? "on" : "off");
+    }
+}
+
+// -- PWR button handler (poll AXP2101 PWR key registers) --
+static void loop_pwr_button(void) {
+    static unsigned long last_pwr_check = 0;
+    if (millis() - last_pwr_check < 100) return;  // Poll every 100ms
+    last_pwr_check = millis();
+
+    uint64_t irq = pmu.getIrqStatus();
+    if (irq == 0) return;
+
+    if (pmu.isPekeyLongPressIrq()) {
+        pmu.clearIrqStatus();
+        // PWR long press: enter deep sleep
+        LOG_INFO("PWR long press: entering deep sleep");
+        set_backlight(false);
+        delay(100);
+        pmu.disableDC1();
+        pmu.disableALDO1();
+        pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
+        esp_sleep_enable_timer_wakeup(60000000);
+        esp_sleep_enable_ext0_wakeup((gpio_num_t)TP_INT, 0);
+        esp_deep_sleep_start();
+    } else if (pmu.isPekeyShortPressIrq()) {
+        pmu.clearIrqStatus();
+        // PWR short press: toggle quick panel
+        reset_activity_timer();
+        if (quick_panel_is_visible()) {
+            quick_panel_hide();
+        } else {
+            quick_panel_show();
+        }
+        LOG_INFO("PWR short press: quick panel");
+    } else {
+        pmu.clearIrqStatus();
+    }
+}
+
 // ===========================================================
 // Main loop
 // ===========================================================
@@ -555,5 +646,7 @@ void loop() {
     loop_telemetry();
     loop_power_management();
     loop_gesture();
+    loop_boot_button();
+    loop_pwr_button();
     delay(2);
 }

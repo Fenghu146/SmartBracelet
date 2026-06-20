@@ -106,15 +106,25 @@
     <!-- Chat -->
     <div class="card notify-card" id="voiceCard">
       <div class="notify-header">
-        <div class="card-label" style="margin-bottom:0">&#x1F4AC; Chat</div>
+        <div class="card-label" style="margin-bottom:0">&#x1F4AC; Xiaozhi AI</div>
         <span id="voiceArrow" class="notify-arrow">&#x25BC;</span>
       </div>
       <div id="voiceBody" class="notify-body">
+        <!-- Xiaozhi Server Config -->
         <div class="input-group">
-          <div class="input-label">DeepSeek API Key</div>
-          <input id="inputApiKey" class="input-field" type="password" placeholder="sk-...">
+          <div class="input-label">WebSocket URL</div>
+          <input id="inputWsUrl" class="input-field" type="text" placeholder="wss://api.tenclass.net/xiaozhi/v2/">
+        </div>
+        <div class="input-group">
+          <div class="input-label">Token</div>
+          <input id="inputToken" class="input-field" type="password" placeholder="Bearer token...">
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <button id="btnXzConnect" class="btn-send" style="flex:1;background:var(--green)">Connect</button>
+          <span id="xzStatus" class="notify-status" style="flex:1;line-height:48px">Disconnected</span>
         </div>
         <div id="bleStatusHint" class="notify-status" style="margin-bottom:8px;display:none"></div>
+        <!-- Text + Voice Input -->
         <div class="input-group" style="display:flex;gap:8px">
           <input id="inputChatText" class="input-field" type="text" placeholder="Type a message..." style="flex:1" maxlength="500">
           <button id="btnSendChat" class="btn-send" style="width:auto;padding:0 16px;flex-shrink:0">Send</button>
@@ -192,6 +202,7 @@
 <script src="js/ble.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/ota.js"></script>
+<script src="js/xiaozhi.js"></script>
 <script src="js/chat.js"></script>
 <script src="js/app.js"></script>
 </body>

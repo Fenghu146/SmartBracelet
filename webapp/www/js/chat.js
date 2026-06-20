@@ -1,28 +1,25 @@
-/* SmartBracelet — Chat (chat.js) */
-// Voice input + DeepSeek LLM integration
+/* SmartBracelet — Xiaozhi AI Chat (chat.js)
+ * Replaces DeepSeek text chat with Xiaozhi WebSocket protocol.
+ * Voice input via Web Speech API, communication via WebSocket,
+ * results forwarded to watch via BLE.
+ */
 
+const xzClient = new XiaozhiClient();
 let recognition = null;
 let isRecording = false;
 const voiceChatLog = [];
-const chatHistory = [];  // multi-turn conversation
+let lastSTTText = '';
+let lastTTSText = '';
 
 const $ = id => document.getElementById(id);
 
-// ── Event Bindings (called after DOM ready) ──
+// ── Event Bindings ──
 function initChat() {
   $('voiceCard').addEventListener('click', e => {
     if (e.target.closest('.input-field') || e.target.closest('.btn-send')) return;
     $('voiceBody').classList.toggle('open');
     $('voiceArrow').classList.toggle('open');
-    const hint = $('bleStatusHint');
-    if (ble.isConnected) {
-      hint.textContent = '\u{1F7E2} Watch connected';
-      hint.style.color = 'var(--green)';
-    } else {
-      hint.textContent = '\u26A0\uFE0F Watch not connected \u2014 use "Scan for Devices" first';
-      hint.style.color = 'var(--amber)';
-    }
-    hint.style.display = 'block';
+    updateBleHint();
   });
 
   $('inputChatText').addEventListener('keydown', e => {
@@ -33,17 +30,109 @@ function initChat() {
     if (isRecording) stopVoiceInput();
     else startVoiceInput();
   });
+  $('btnXzConnect').addEventListener('click', toggleXzConnection);
 
-  // Restore API key
-  const savedKey = localStorage.getItem('deepseek_api_key');
-  if (savedKey) $('inputApiKey').value = savedKey;
+  // Restore saved config
+  const savedUrl = localStorage.getItem('xz_ws_url');
+  const savedToken = localStorage.getItem('xz_token');
+  if (savedUrl) $('inputWsUrl').value = savedUrl;
+  if (savedToken) $('inputToken').value = savedToken;
+
+  // Setup xiaozhi callbacks
+  xzClient.onConnected = () => {
+    setXzStatus('Connected', 'success');
+    $('btnXzConnect').textContent = 'Disconnect';
+    $('btnXzConnect').style.background = 'var(--red)';
+    setVoiceStatus('Ready - Xiaozhi connected', 'success');
+  };
+  xzClient.onDisconnected = () => {
+    setXzStatus('Disconnected', '');
+    $('btnXzConnect').textContent = 'Connect';
+    $('btnXzConnect').style.background = 'var(--green)';
+    setVoiceStatus('Disconnected', '');
+  };
+  xzClient.onSTT = (text) => {
+    lastSTTText = text;
+    $('voiceTransText').textContent = text;
+    $('voiceTransBox').style.display = 'block';
+    setVoiceStatus('Heard: ' + text, 'pending');
+  };
+  xzClient.onTTSState = (state) => {
+    if (state === 'start') {
+      setVoiceStatus('AI speaking...', 'pending');
+    } else if (state === 'stop') {
+      setVoiceStatus('Done', 'success');
+      // Send results to watch
+      sendToWatch(lastSTTText, lastTTSText);
+      updateVoiceChatLog(lastSTTText, lastTTSText);
+      lastTTSText = '';
+    }
+  };
+  xzClient.onTTSText = (text) => {
+    lastTTSText = text;
+    $('voiceRespText').textContent = text;
+    $('voiceRespBox').style.display = 'block';
+  };
+  xzClient.onError = (msg) => {
+    setVoiceStatus('Error: ' + msg, 'error');
+    setXzStatus('Error', 'error');
+  };
+  xzClient.onLog = (msg) => {
+    console.log('[XZ]', msg);
+  };
 }
 
-// ── Voice Input ──
+function updateBleHint() {
+  const hint = $('bleStatusHint');
+  if (ble.isConnected) {
+    hint.textContent = '\u{1F7E2} Watch connected';
+    hint.style.color = 'var(--green)';
+  } else {
+    hint.textContent = '\u26A0\uFE0F Watch not connected';
+    hint.style.color = 'var(--amber)';
+  }
+  hint.style.display = 'block';
+}
+
+// ── Xiaozhi Connection ──
+async function toggleXzConnection() {
+  if (xzClient.connected) {
+    xzClient.disconnect();
+    return;
+  }
+  const url = $('inputWsUrl').value.trim();
+  const token = $('inputToken').value.trim();
+  if (!url) { setXzStatus('Enter WebSocket URL', 'error'); return; }
+
+  // Save config
+  localStorage.setItem('xz_ws_url', url);
+  localStorage.setItem('xz_token', token);
+
+  setXzStatus('Connecting...', 'pending');
+  $('btnXzConnect').disabled = true;
+
+  try {
+    await xzClient.connect(url, token, 2);
+  } catch (e) {
+    setXzStatus('Failed: ' + e.message, 'error');
+  }
+  $('btnXzConnect').disabled = false;
+}
+
+function setXzStatus(text, cls) {
+  $('xzStatus').textContent = text;
+  $('xzStatus').className = `notify-status ${cls || ''}`;
+}
+
+// ── Voice Input (Web Speech API) ──
 function startVoiceInput() {
+  if (!xzClient.connected) {
+    setVoiceStatus('Connect to Xiaozhi first', 'error');
+    return;
+  }
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
-    setVoiceStatus('Speech recognition not supported in this browser', 'error');
+    setVoiceStatus('Speech recognition not supported', 'error');
     return;
   }
   recognition = new SpeechRecognition();
@@ -54,6 +143,7 @@ function startVoiceInput() {
   recognition.onresult = (event) => {
     const text = event.results[0][0].transcript;
     $('inputChatText').value = text;
+    // Send via xiaozhi protocol
     sendTextChat();
   };
   recognition.onerror = (e) => {
@@ -80,68 +170,47 @@ function resetRecordBtn() {
   $('btnRecord').style.background = 'var(--green)';
 }
 
-// ── Text Chat ──
-async function sendTextChat() {
+// ── Text Chat via Xiaozhi ──
+function sendTextChat() {
   const text = $('inputChatText').value.trim();
   if (!text) return;
-  const apiKey = $('inputApiKey').value.trim();
-  if (!apiKey) { setVoiceStatus('Enter API key first', 'error'); return; }
-  localStorage.setItem('deepseek_api_key', apiKey);
+  if (!xzClient.connected) {
+    setVoiceStatus('Connect to Xiaozhi first', 'error');
+    return;
+  }
 
   $('inputChatText').value = '';
   $('voiceTransText').textContent = text;
   $('voiceTransBox').style.display = 'block';
+  lastSTTText = text;
+  lastTTSText = '';
   setVoiceStatus('Thinking...', 'pending');
 
-  try {
-    chatHistory.push({ role: 'user', content: text });
-    const messages = [
-      { role: 'system', content: 'You are a smartwatch assistant. Reply shortly (under 80 words). Match the user language.' },
-      ...chatHistory.slice(-10),
-    ];
-
-    const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'deepseek-chat', messages }),
-    });
-    if (!resp.ok) throw new Error(`API ${resp.status}: ${await resp.text()}`);
-    const data = await resp.json();
-    const reply = data.choices[0].message.content;
-
-    chatHistory.push({ role: 'assistant', content: reply });
-    $('voiceRespText').textContent = reply;
-    $('voiceRespBox').style.display = 'block';
-    setVoiceStatus('Done', 'success');
-    updateVoiceChatLog(text, reply);
-
-    // Send to watch via BLE
-    const bleHint = $('bleStatusHint');
-    if (ble.isConnected) {
-      try {
-        await ble.sendNotification('voice', 'result', `${text}|${reply}`);
-        bleHint.textContent = '\u2705 Sent to watch';
-        bleHint.style.color = 'var(--green)';
-        bleHint.style.display = 'block';
-      } catch (e) {
-        bleHint.textContent = `\u274C Watch send failed: ${e.message}`;
-        bleHint.style.color = 'var(--red)';
-        bleHint.style.display = 'block';
-      }
-    } else {
-      bleHint.textContent = '\u26A0\uFE0F Watch not connected. Use "Scan for Devices" to connect first.';
-      bleHint.style.color = 'var(--amber)';
-      bleHint.style.display = 'block';
-    }
-  } catch (e) {
-    console.error('Chat error:', e);
-    setVoiceStatus(`Error: ${e.message}`, 'error');
-    if (ble.isConnected) {
-      try { await ble.sendNotification('voice', 'error', e.message); } catch (e2) {}
-    }
+  // Send text via xiaozhi protocol
+  const ok = xzClient.sendTextMessage(text);
+  if (!ok) {
+    setVoiceStatus('Send failed - reconnect and try again', 'error');
   }
 }
 
+// ── Send results to watch via BLE ──
+async function sendToWatch(transcription, response) {
+  if (!ble.isConnected) return;
+  const bleHint = $('bleStatusHint');
+  try {
+    const text = `${transcription}|${response}`;
+    await ble.sendNotification('voice', 'result', text);
+    bleHint.textContent = '\u2705 Sent to watch';
+    bleHint.style.color = 'var(--green)';
+    bleHint.style.display = 'block';
+  } catch (e) {
+    bleHint.textContent = `\u274C Watch: ${e.message}`;
+    bleHint.style.color = 'var(--red)';
+    bleHint.style.display = 'block';
+  }
+}
+
+// ── UI Helpers ──
 function setVoiceStatus(text, cls) {
   $('voiceStatus').textContent = text;
   $('voiceStatus').className = `notify-status ${cls || ''}`;

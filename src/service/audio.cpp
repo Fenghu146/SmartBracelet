@@ -8,6 +8,7 @@
 #include <math.h>
 #include <Wire.h>
 #include <driver/i2s.h>
+#include <freertos/ringbuf.h>
 #include <FS.h>
 #include <SD_MMC.h>
 
@@ -156,34 +157,32 @@ static bool i2s_init_tx(void) {
 
 // --- I2S driver (RX: microphone via INMP441 on I2S_NUM_1) ---
 static volatile bool rx_recording = false;
-static QueueHandle_t rx_queue = NULL;
+static RingbufHandle_t rx_ringbuf = NULL;
 static TaskHandle_t rx_task_handle = NULL;
 
 #define RX_DMA_BUF_COUNT 4
 #define RX_DMA_BUF_LEN   1024  // samples per DMA buffer
-#define RX_CHUNK_SAMPLES 512   // samples per chunk sent to queue (32ms at 16kHz)
+#define RX_CHUNK_SAMPLES 512   // samples per chunk (32ms at 16kHz)
+#define RX_RINGBUF_SIZE  (RX_CHUNK_SAMPLES * sizeof(int16_t) * 8)  // 8 chunks
 
 static void voice_rx_task(void *param) {
-  int16_t *chunk = (int16_t *)malloc(RX_CHUNK_SAMPLES * sizeof(int16_t));
-  if (!chunk) { vTaskDelete(NULL); return; }
+  int16_t chunk[RX_CHUNK_SAMPLES];
 
   while (rx_recording) {
     size_t bytes_read = 0;
-    esp_err_t err = i2s_read(I2S_NUM_1, chunk, RX_CHUNK_SAMPLES * sizeof(int16_t),
+    esp_err_t err = i2s_read(I2S_NUM_1, chunk, sizeof(chunk),
                              &bytes_read, pdMS_TO_TICKS(500));
     if (err == ESP_OK && bytes_read > 0) {
-      int samples = bytes_read / sizeof(int16_t);
-      // Send chunk pointer to queue (queue holds the pointer, task owns the buffer copy)
-      int16_t *copy = (int16_t *)malloc(bytes_read);
-      if (copy) {
-        memcpy(copy, chunk, bytes_read);
-        if (xQueueSend(rx_queue, &copy, pdMS_TO_TICKS(100)) != pdTRUE) {
-          free(copy);  // queue full, drop chunk
-        }
+      // Write directly to ring buffer (no malloc/free)
+      if (xRingbufferSend(rx_ringbuf, chunk, bytes_read, pdMS_TO_TICKS(50)) != pdTRUE) {
+        // Ring buffer full, drop oldest by reading and discarding
+        size_t item_size;
+        void *item = xRingbufferReceive(rx_ringbuf, &item_size, 0);
+        if (item) vRingbufferReturnItem(rx_ringbuf, item);
+        xRingbufferSend(rx_ringbuf, chunk, bytes_read, 0);
       }
     }
   }
-  free(chunk);
   rx_task_handle = NULL;
   vTaskDelete(NULL);
 }
@@ -218,16 +217,18 @@ bool audio_init_rx(void) {
   if (err != ESP_OK) { LOG_ERR("I2S_RX: pin err %d", err); return false; }
   i2s_stop(I2S_NUM_1);  // install but don't start yet
 
-  rx_queue = xQueueCreate(8, sizeof(int16_t *));
-  LOG_INFO("I2S_RX: INMP441 ready");
+  rx_ringbuf = xRingbufferCreate(RX_RINGBUF_SIZE, RINGBUF_TYPE_BYTEBUF);
+  LOG_INFO("I2S_RX: INMP441 ready (ringbuf %d bytes)", RX_RINGBUF_SIZE);
   return true;
 }
 
 bool audio_start_recording(void) {
   if (rx_recording) return false;
-  // Drain any leftover chunks
-  int16_t *old;
-  while (xQueueReceive(rx_queue, &old, 0) == pdTRUE) free(old);
+  // Reset ring buffer
+  if (rx_ringbuf) {
+    vRingbufferDelete(rx_ringbuf);
+    rx_ringbuf = xRingbufferCreate(RX_RINGBUF_SIZE, RINGBUF_TYPE_BYTEBUF);
+  }
 
   rx_recording = true;
   i2s_start(I2S_NUM_1);
@@ -246,12 +247,14 @@ void audio_stop_recording(void) {
 }
 
 int audio_read_chunk(int16_t *buf, int max_samples) {
-  int16_t *chunk = NULL;
-  if (xQueueReceive(rx_queue, &chunk, pdMS_TO_TICKS(200)) == pdTRUE && chunk) {
-    int samples = RX_CHUNK_SAMPLES;
-    if (samples > max_samples) samples = max_samples;
-    memcpy(buf, chunk, samples * sizeof(int16_t));
-    free(chunk);
+  size_t item_size = 0;
+  void *item = xRingbufferReceiveUpTo(rx_ringbuf, &item_size,
+                                       pdMS_TO_TICKS(200),
+                                       max_samples * sizeof(int16_t));
+  if (item && item_size > 0) {
+    int samples = item_size / sizeof(int16_t);
+    memcpy(buf, item, item_size);
+    vRingbufferReturnItem(rx_ringbuf, item);
     return samples;
   }
   return 0;
