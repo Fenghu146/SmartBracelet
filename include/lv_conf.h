@@ -93,7 +93,7 @@
 /*==================
    OTHERS
  *==================*/
-#define LV_USE_PERF_MONITOR 0
+#define LV_USE_PERF_MONITOR 1
 #define LV_USE_MEM_MONITOR 0
 #define LV_SPRINTF_USE_FLOAT 0
 #define LV_USE_USER_DATA 1

@@ -9,6 +9,9 @@
 #include <lvgl.h>
 
 #define WEATHER_REFRESH_MS 1800000 // 30 min cache
+#define WEATHER_LAT "39.9042"
+#define WEATHER_LON "116.4074"
+#define WEATHER_CITY "Beijing"
 
 static lv_obj_t *temp_label = nullptr;
 static lv_obj_t *humid_label = nullptr;
@@ -38,11 +41,6 @@ static const char *wmo_code_str(int code) {
 
 static void weather_fetch(void) {
   if (!wifi_is_connected()) return;
-  if (!nvs_has_weather_location()) return;
-
-  char lat[16], lon[16];
-  nvs_get_weather_lat(lat, sizeof(lat));
-  nvs_get_weather_lon(lon, sizeof(lon));
 
   WiFiClient client;
   HTTPClient http;
@@ -50,9 +48,8 @@ static void weather_fetch(void) {
   char url[256];
   snprintf(url, sizeof(url),
     "http://api.open-meteo.com/v1/forecast"
-    "?latitude=%s&longitude=%s"
-    "&current=temperature_2m,relative_humidity_2m,weather_code",
-    lat, lon);
+    "?latitude=" WEATHER_LAT "&longitude=" WEATHER_LON
+    "&current=temperature_2m,relative_humidity_2m,weather_code");
 
   http.begin(client, url);
   http.setTimeout(5000);
@@ -68,8 +65,8 @@ static void weather_fetch(void) {
       last_code = doc["current"]["weather_code"];
       has_data = true;
       last_fetch = millis();
-      LOG_INFO("Weather: %.1fC %d%% code=%d (lat=%s lon=%s)",
-        last_temp, last_humid, last_code, lat, lon);
+      LOG_INFO("Weather: %.1fC %d%% code=%d (" WEATHER_CITY ")",
+        last_temp, last_humid, last_code);
     } else {
       LOG_ERR("Weather: JSON error: %s", err.c_str());
     }
@@ -84,7 +81,7 @@ void weather_create(lv_obj_t *parent) {
   lv_obj_set_style_bg_color(parent, lv_color_hex(0x0d0d1a), 0);
 
   lv_obj_t *title = lv_label_create(parent);
-  lv_label_set_text(title, "Weather");
+  lv_label_set_text(title, "Weather " WEATHER_CITY);
   lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
   lv_obj_set_style_text_color(title, lv_color_hex(0x00d4ff), 0);
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
@@ -118,11 +115,6 @@ void weather_create(lv_obj_t *parent) {
 }
 
 void weather_update(void) {
-  // Determine status message
-  if (!nvs_has_weather_location()) {
-    lv_label_set_text(status_label, "Connect phone for location");
-    return;
-  }
   if (!wifi_is_connected()) {
     lv_label_set_text(status_label, "WiFi off");
     return;
