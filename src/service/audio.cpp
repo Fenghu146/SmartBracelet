@@ -9,8 +9,6 @@
 #include <Wire.h>
 #include <driver/i2s.h>
 #include <freertos/ringbuf.h>
-#include <FS.h>
-#include <SD_MMC.h>
 
 // --- PCA9557 I2C I/O expander (address 0x19) ---
 // IO0=LCD_CS, IO1=PA_EN, IO2=DVP_PWDN
@@ -303,65 +301,7 @@ bool audio_play_sine(int freq_hz, int duration_ms) {
   return true;
 }
 
-struct __attribute__((packed)) WavHeader {
-  char riff[4]; uint32_t file_size; char wave[4];
-  char fmt[4]; uint32_t fmt_len; uint16_t fmt_tag;
-  uint16_t channels; uint32_t sample_rate; uint32_t byte_rate;
-  uint16_t block_align; uint16_t bits_per_sample;
-  char data[4]; uint32_t data_size;
-};
-
-static volatile bool playing = false;
-static void play_wav_task(void *param);
-
-bool audio_play_wav(const char *path) {
-  if (playing) return false;
-  char *copy = strdup(path);
-  if (!copy) return false;
-  playing = true;
-  xTaskCreate(play_wav_task, "audio_play", 4096, copy, 1, NULL);
-  return true;
-}
-
-static void play_wav_task(void *param) {
-  char *path = (char *)param;
-  File f = SD_MMC.open(path);
-  if (!f) {
-    LOG_ERR("Audio: cannot open %s", path);
-    free(path); playing = false; vTaskDelete(NULL); return;
-  }
-  LOG_INFO("Playing: %s", path);
-  free(path);
-
-  WavHeader hdr;
-  size_t nr = f.read((uint8_t*)&hdr, sizeof(hdr));
-  if (nr != sizeof(hdr) || memcmp(hdr.riff, "RIFF", 4) != 0 || memcmp(hdr.wave, "WAVE", 4) != 0) {
-    LOG_ERR("Audio: invalid WAV header");
-    f.close(); playing = false; vTaskDelete(NULL); return;
-  }
-
-  i2s_set_sample_rates(I2S_NUM_0, hdr.sample_rate);
-  uint8_t *buf = (uint8_t *)malloc(1024);
-  if (!buf) {
-    LOG_ERR("Audio: malloc failed for playback buffer");
-    f.close(); playing = false; vTaskDelete(NULL); return;
-  }
-
-  while (playing && f.available()) {
-    int n = f.read(buf, 1024);
-    if (n <= 0) break;
-    size_t written;
-    i2s_write(I2S_NUM_0, buf, n, &written, portMAX_DELAY);
-  }
-  free(buf);
-  f.close();
-  i2s_set_sample_rates(I2S_NUM_0, 44100);  // restore default
-  playing = false;
-  LOG_INFO("Playback done");
-  vTaskDelete(NULL);
-}
-
-void audio_stop(void) { playing = false; i2s_zero_dma_buffer(I2S_NUM_0); }
+void audio_stop(void) { i2s_zero_dma_buffer(I2S_NUM_0); }
 void audio_set_volume(uint8_t vol) {
   if (vol > 100) vol = 100;
   // DAC_VOL: 0x00=-95dB ... 0xBF=0dB ... 0xFF=+32dB
@@ -370,7 +310,6 @@ void audio_set_volume(uint8_t vol) {
   if (reg < 0x01) reg = 0x01;
   es8311_write(ES8311_DAC_VOL, reg);
 }
-bool audio_is_playing(void) { return playing; }
 
 // Play TTS audio received from phone (blocking, single call)
 void audio_play_response(const int16_t *data, int samples, int sample_rate) {

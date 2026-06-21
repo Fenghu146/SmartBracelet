@@ -16,7 +16,6 @@ enum PageIndex {
     PAGE_NOTIF,
     PAGE_STOPWATCH,
     PAGE_WEATHER,
-    PAGE_PLAYER,
     PAGE_VOICE,
     PAGE_MUSIC,
     PAGE_SETTINGS,

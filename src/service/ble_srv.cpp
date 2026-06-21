@@ -296,7 +296,10 @@ static void setup_ota_service(BLEServer *server)
 void ble_srv_init(void)
 {
     BLEDevice::init(DEVICE_NAME);
-    BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT_NO_MITM);
+    // Note: link-level encryption (ESP_BLE_SEC_ENCRYPT_NO_MITM) was removed —
+    // with no-bond auth it forced re-pairing on every reconnect and caused
+    // Web Bluetooth/Capacitor to drop the link. The custom services rely on
+    // their own text protocol, not link encryption.
     BLEDevice::setMTU(256);
     BLESecurity *sec = new BLESecurity();
     sec->setAuthenticationMode(ESP_LE_AUTH_NO_BOND);
@@ -319,12 +322,6 @@ void ble_srv_init(void)
     adv->addServiceUUID(BLEUUID("abcd1000-0000-1000-8000-00805f9b34fb"));
     adv->addServiceUUID(BLEUUID(OTA_SERVICE_UUID));
     adv->setScanResponse(true);
-    adv->setMinPreferred(0x06);
-    adv->setMinPreferred(0x12);
-    // Slow down advertising interval to save power (units of 0.625ms)
-    // 0x0400 = 640ms interval (default ~100ms is too aggressive for battery)
-    adv->setMinInterval(0x400);
-    adv->setMaxInterval(0x800);
     BLEDevice::startAdvertising();
 
     LOG_INFO("BLE: advertising");

@@ -1,5 +1,8 @@
 /* SmartBracelet — BLE Service (ble.js) */
 
+// Global helper — declared here (first loaded script), used by all other scripts
+const $ = id => document.getElementById(id);
+
 // ═══════════════════════════════════════════════════════════════
 // Platform detection
 // ═══════════════════════════════════════════════════════════════
@@ -90,64 +93,126 @@ class BleService {
   // ── Web Bluetooth: requestDevice shows system picker ──
   async connectWeb(onProgress) {
     const progress = onProgress || (() => {});
+
+    // Disconnect any previous connection
+    if (this.device && this.device.gatt && this.device.gatt.connected) {
+      try { this.device.gatt.disconnect(); } catch (e) {}
+    }
+    this.connected = false;
+    this.chars = {};
+    this.server = null;
+    this.device = null;
+
     console.log('[BLE] Web: requesting device (no filter, shows all nearby BLE devices)...');
     progress('Select your watch from the list...');
-    this.device = await navigator.bluetooth.requestDevice({
-      acceptAllDevices: true,
-      optionalServices: [
-        UUID.DATA_SERVICE, UUID.NOTIFY_SERVICE,
-        UUID.BATTERY_SERVICE, UUID.TIME_SERVICE,
-      ],
-    });
+
+    try {
+      this.device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [
+          UUID.DATA_SERVICE, UUID.NOTIFY_SERVICE,
+          UUID.BATTERY_SERVICE, UUID.TIME_SERVICE,
+        ],
+      });
+    } catch (e) {
+      console.error('[BLE] requestDevice failed:', e.message);
+      throw e;
+    }
     console.log('[BLE] Web: selected', this.device.name, this.device.id);
 
     this.device.addEventListener('gattserverdisconnected', () => {
+      console.log('[BLE] GATT disconnected');
       this.connected = false;
       this.chars = {};
       this.server = null;
       if (this.onDisconnected) this.onDisconnected();
     });
 
-    progress('Connecting...');
-    this.server = await this._timeout(this.device.gatt.connect(), 10000, 'gatt.connect');
+    progress('Connecting GATT...');
+    try {
+      this.server = await this._timeout(this.device.gatt.connect(), 15000, 'gatt.connect');
+    } catch (e) {
+      console.error('[BLE] gatt.connect failed:', e.message);
+      // Retry once after short delay
+      await new Promise(r => setTimeout(r, 500));
+      try {
+        this.server = await this._timeout(this.device.gatt.connect(), 15000, 'gatt.connect.retry');
+      } catch (e2) {
+        console.error('[BLE] gatt.connect retry failed:', e2.message);
+        throw new Error('GATT connect failed: ' + e2.message);
+      }
+    }
     this.connected = true;
     this.deviceId = this.device.id;
+    console.log('[BLE] GATT connected');
 
-    // Discover characteristics (each with 5s timeout)
-    progress('Discovering services...');
-    await this._webDiscover(UUID.DATA_SERVICE, UUID.STEPS_CHAR, 'steps');
-    await this._webDiscover(UUID.DATA_SERVICE, UUID.BATT_RAW_CHAR, 'battRaw');
-    await this._webDiscover(UUID.DATA_SERVICE, UUID.ACTIVITY_CHAR, 'activity');
-    await this._webDiscover(UUID.BATTERY_SERVICE, UUID.BATTERY_LEVEL, 'battLevel');
-    await this._webDiscover(UUID.NOTIFY_SERVICE, UUID.NOTIFY_RX_CHAR, 'notifyRx');
-    await this._webDiscover(UUID.NOTIFY_SERVICE, UUID.NOTIFY_TX_CHAR, 'notifyTx');
-    console.log('[BLE] Discovered chars:', Object.keys(this.chars));
+    // Start service discovery in background (non-blocking)
+    this._discoverServicesInBackground(progress);
+  }
 
-    // Subscribe to notifications
-    progress('Subscribing to notifications...');
-    await this._webNotify('steps', dv => {
-      if (this.onStepsChanged) this.onStepsChanged(dv.getUint32(0, true));
-    });
-    await this._webNotify('activity', dv => {
-      if (this.onActivityChanged) this.onActivityChanged(dv.getUint8(0));
-    });
-    await this._webNotify('battLevel', dv => {
-      if (this.onBatteryChanged) this.onBatteryChanged(dv.getUint8(0));
-    });
-    await this._webNotify('notifyTx', dv => {
-      const text = new TextDecoder().decode(dv.buffer);
-      if (this.onAckReceived) this.onAckReceived(text);
-    });
+  // Background service discovery — does NOT block connectWeb()
+  async _discoverServicesInBackground(progress) {
+    try {
+      await new Promise(r => setTimeout(r, 500));
 
-    progress('Syncing time...');
-    try { await this._timeout(this._syncTimeWeb(), 5000, 'timeSync'); } catch (e) { console.warn('[BLE] Time sync skipped:', e.message); }
+      progress('Discovering services...');
+      await Promise.allSettled([
+        this._webDiscoverWithRetry(UUID.DATA_SERVICE, UUID.STEPS_CHAR, 'steps'),
+        this._webDiscoverWithRetry(UUID.DATA_SERVICE, UUID.BATT_RAW_CHAR, 'battRaw'),
+        this._webDiscoverWithRetry(UUID.BATTERY_SERVICE, UUID.BATTERY_LEVEL, 'battLevel'),
+        this._webDiscoverWithRetry(UUID.NOTIFY_SERVICE, UUID.NOTIFY_RX_CHAR, 'notifyRx'),
+        this._webDiscoverWithRetry(UUID.NOTIFY_SERVICE, UUID.NOTIFY_TX_CHAR, 'notifyTx'),
+      ]);
+      console.log('[BLE] Discovered chars:', Object.keys(this.chars));
+
+      // Subscribe to notifications
+      progress('Subscribing...');
+      await Promise.allSettled([
+        this._webNotify('steps', dv => {
+          if (this.onStepsChanged) this.onStepsChanged(dv.getUint32(0, true));
+        }),
+        this._webNotify('battLevel', dv => {
+          if (this.onBatteryChanged) this.onBatteryChanged(dv.getUint8(0));
+        }),
+        this._webNotify('notifyTx', dv => {
+          const text = new TextDecoder().decode(dv.buffer);
+          if (this.onAckReceived) this.onAckReceived(text);
+        }),
+      ]);
+
+      // Sync time
+      try { await this._timeout(this._syncTimeWeb(), 5000, 'timeSync'); } catch (e) { console.warn('[BLE] Time sync skipped:', e.message); }
+      console.log('[BLE] Background discovery complete');
+    } catch (e) {
+      console.warn('[BLE] Background discovery error:', e.message);
+    }
   }
 
   async _webDiscover(svcUUID, charUUID, name) {
     try {
-      const svc = await this._timeout(this.server.getPrimaryService(svcUUID), 5000, `svc:${name}`);
-      this.chars[name] = await this._timeout(svc.getCharacteristic(charUUID), 5000, `char:${name}`);
+      const svc = await this._timeout(this.server.getPrimaryService(svcUUID), 10000, `svc:${name}`);
+      this.chars[name] = await this._timeout(svc.getCharacteristic(charUUID), 10000, `char:${name}`);
     } catch (e) { console.warn(`[BLE] Char ${name} not found:`, e.message); }
+  }
+
+  async _webDiscoverWithRetry(svcUUID, charUUID, name) {
+    // First attempt
+    try {
+      const svc = await this._timeout(this.server.getPrimaryService(svcUUID), 10000, `svc:${name}`);
+      this.chars[name] = await this._timeout(svc.getCharacteristic(charUUID), 10000, `char:${name}`);
+      return;
+    } catch (e) {
+      console.warn(`[BLE] Char ${name} attempt 1 failed:`, e.message);
+    }
+    // Retry after 500ms delay
+    await new Promise(r => setTimeout(r, 500));
+    try {
+      const svc = await this._timeout(this.server.getPrimaryService(svcUUID), 10000, `svc:${name}.retry`);
+      this.chars[name] = await this._timeout(svc.getCharacteristic(charUUID), 10000, `char:${name}.retry`);
+      console.log(`[BLE] Char ${name} found on retry`);
+    } catch (e) {
+      console.warn(`[BLE] Char ${name} not found after retry:`, e.message);
+    }
   }
 
   async _webNotify(name, cb) {

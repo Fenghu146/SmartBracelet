@@ -15,8 +15,6 @@
 #include "service/ble_srv.h"
 #include "stopwatch.h"
 #include "weather.h"
-#include "player.h"
-#include "service/tf_card.h"
 #include "service/audio.h"
 #include "service/voice_chat.h"
 #include "voice_chat_ui.h"
@@ -216,7 +214,6 @@ static void setup_display(void) {
 
 // -- Setup: software module init --
 static void setup_modules(void) {
-    tf_init();
     audio_init();
     voice_chat_init();
     fall_detect_init();
@@ -457,7 +454,6 @@ static void update_ui_pages(const ui_telemetry_t *telem) {
         if (current_page == PAGE_SENSOR) ui_update_sensor_page(telem);
         if (current_page == PAGE_NOTIF) ui_update_notif_page();
         if (current_page == PAGE_WEATHER) weather_update();
-        if (current_page == PAGE_PLAYER) player_update();
         if (current_page == PAGE_VOICE) voice_chat_page_update();
         if (current_page == PAGE_SETTINGS) settings_page_update();
         if (current_face == FACE_SPORT && current_page == PAGE_DIGITAL) sport_face_update(telem);
