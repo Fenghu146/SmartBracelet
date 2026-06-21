@@ -1,7 +1,6 @@
 /* SmartBracelet — App Controller (app.js) */
 
 const STEPS_GOAL = 10000;
-const $ = id => document.getElementById(id);
 const ble = new BleService();
 const watchData = new WatchData();
 const notifyLog = [];
@@ -45,16 +44,30 @@ async function _connectWebBluetooth() {
   els.connectStatus.textContent = 'Opening device selector...';
   els.btnScan.disabled = true;
   try {
-    // Overall timeout: 45s for the entire connection flow
-    const overallTimeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Connection timed out (45s). Please try again.')), 45000)
-    );
+    // The timeout only covers the GATT connect + discovery + read phase,
+    // NOT the time the user spends in the system device picker. The timer
+    // is armed inside the progress callback, the first time ble.js reports
+    // a post-picker message ("Connecting GATT...").
+    let timeoutId = null;
+    let gattReject = null;
+    const gattTimeout = new Promise((_, reject) => { gattReject = reject; });
 
     const connectFlow = (async () => {
+      console.log('[App] Calling ble.connect...');
       await ble.connect(undefined, (msg) => {
+        console.log('[App] BLE progress:', msg);
         els.connectStatus.textContent = msg;
+        // Arm the 90s timer once the user has picked a device and GATT
+        // connect begins — the device-picker phase should not be bounded.
+        if (timeoutId === null && msg.includes('Connecting GATT')) {
+          timeoutId = setTimeout(
+            () => gattReject(new Error('Connection timed out (90s). Please try again.')),
+            90000
+          );
+        }
       });
 
+      console.log('[App] BLE connected, reading data...');
       els.connectStatus.textContent = 'Reading data...';
       try {
         const data = await ble.readAll();
@@ -64,17 +77,20 @@ async function _connectWebBluetooth() {
       }
     })();
 
-    await Promise.race([connectFlow, overallTimeout]);
+    await Promise.race([connectFlow, gattTimeout]);
+    if (timeoutId) clearTimeout(timeoutId);
+    console.log('[App] Connection flow complete, showing dashboard');
     showDashboard();
     render();
   } catch (e) {
+    console.error('[App] Connection error:', e);
     // Disconnect on timeout to clean up BLE state
     if ((e.message || '').includes('timed out')) {
       try { ble.disconnect(); } catch (_) {}
     }
     const msg = e.message || String(e);
     if (msg.includes('cancel') || msg.includes('user') || msg.includes('cancelled')) {
-      els.connectStatus.textContent = 'Selection cancelled. Click Scan to try again.';
+      els.connectStatus.textContent = 'Cancelled. Click Scan to try again.';
     } else {
       els.connectStatus.textContent = `Error: ${msg}`;
     }
@@ -201,6 +217,8 @@ function showConnectScreen() {
   els.btnScan.disabled = false;
   els.deviceList.style.display = 'none';
   els.btnStopScan.style.display = 'none';
+  // Reset GPS-send flag so weather location is re-sent after a reconnect
+  locationSent = false;
 }
 function showDashboard() {
   els.connectScreen.classList.add('hidden');

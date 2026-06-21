@@ -11,8 +11,6 @@ const voiceChatLog = [];
 let lastSTTText = '';
 let lastTTSText = '';
 
-const $ = id => document.getElementById(id);
-
 // ── Event Bindings ──
 function initChat() {
   $('voiceCard').addEventListener('click', e => {

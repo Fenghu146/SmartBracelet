@@ -1,8 +1,6 @@
 /* SmartBracelet — Charts (charts.js) */
 // Chart.js-based data visualization for steps, battery, and activity
 
-const $ = id => document.getElementById(id);
-
 // ── Data Storage (localStorage) ──
 const STORAGE_KEY_STEPS = 'sb_steps_history';
 const STORAGE_KEY_BATTERY = 'sb_battery_history';

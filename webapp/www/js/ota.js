@@ -1,7 +1,6 @@
 /* SmartBracelet — OTA Update (ota.js) */
 // BLE firmware push from phone/browser
 
-const $ = id => document.getElementById(id);
 const CHUNK_SIZE = 480; // bytes per BLE write (MTU ~512 - overhead)
 
 let otaInProgress = false;
