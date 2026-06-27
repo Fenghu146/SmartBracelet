@@ -1,4 +1,5 @@
 .pio
+.codeatlas
 .codegraph
 test_audio.wav
 nul
