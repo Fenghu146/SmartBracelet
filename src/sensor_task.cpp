@@ -63,13 +63,19 @@ void sensor_task_start(SensorQMI8658 *imu_ptr) {
         data_mutex = xSemaphoreCreateMutex();
     }
 
-    // Create sensor task on Core 0, high priority
+    // Create sensor task on Core 0.
+    // IMPORTANT: priority must stay BELOW the BLE controller/host stack, which
+    // also runs on Core 0. If we run at configMAX_PRIORITIES-1, the 125Hz I2C
+    // reads starve NimBLE's conn-event handling and the central drops the link
+    // within ~1s of "BLE: connected" (GATT services then become unreachable).
+    // Priority 5 leaves headroom for the BT stack (which sits near the top)
+    // while still being responsive enough for 125Hz IMU sampling.
     xTaskCreatePinnedToCore(
         sensor_reading_task,
         "sensor",
         4096,           // stack size
         nullptr,        // param
-        configMAX_PRIORITIES - 1,  // highest priority
+        5,              // medium priority — below BT/IP stacks
         &sensor_task_handle,
         0               // pin to Core 0
     );

@@ -94,10 +94,14 @@ bool wifi_ntp_sync(void)
 void wifi_power_off(void) {
     if (!wifi_powered) return;
     wifi_powered = false;
-    WiFi.disconnect(true);
-    WiFi.mode(WIFI_OFF);
+    // Avoid a full WIFI_OFF / esp_wifi_deinit: on ESP32-S3 it can stall the
+    // RF coexistence controller and tear down an in-flight BLE GATT link
+    // (seen as "E wifi: timeout when WiFi un-init, type=4" right before a
+    // Web Bluetooth disconnect). disconnect() without `true` keeps the driver
+    // resident and lets BLE hold the radio, which is enough to drop STA power.
+    WiFi.disconnect();
     connected = false;
-    USBSerial.println("WiFi: radio off (save power)");
+    USBSerial.println("WiFi: STA disconnected (save power)");
 }
 
 void wifi_power_on(void) {

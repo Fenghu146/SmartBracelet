@@ -5,7 +5,7 @@
 #include "watch_faces.h"
 #include "batt_health.h"
 #include "service/ota_update.h"
-#include "service/ble_srv.h"
+
 #include "pin_config.h"
 #include "debug_log.h"
 
@@ -64,7 +64,7 @@ static void on_bright_plus(lv_event_t *e) {
 static void on_dnd_toggle(lv_event_t *e) {
     dnd_on = !dnd_on;
     nvs_set_dnd(dnd_on);
-    ble_srv_set_dnd(dnd_on);
+    nvs_set_dnd(dnd_on);
     lv_label_set_text(dnd_label, dnd_on ? "DND: ON" : "DND: OFF");
     lv_obj_set_style_text_color(dnd_label,
         dnd_on ? lv_color_hex(0xffaa00) : lv_color_hex(0x888899), 0);

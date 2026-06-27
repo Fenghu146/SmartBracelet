@@ -8,8 +8,8 @@
 #include "service/audio.h"
 #include "service/voice_chat.h"
 #include "voice_chat_ui.h"
-#include "service/ble_hid.h"
-#include "service/ble_srv.h"
+
+
 #include "notif_history.h"
 #include <math.h>
 
@@ -276,9 +276,8 @@ static void music_page_create(lv_obj_t *parent) {
     lv_label_set_text(lbl_prev, "|<");
     lv_obj_set_style_text_font(lbl_prev, &lv_font_montserrat_16, 0);
     lv_obj_center(lbl_prev);
-    lv_obj_add_event_cb(btn_prev, [](lv_event_t *e) {
-        ble_hid_prev_track();
-    }, LV_EVENT_CLICKED, NULL);
+    // Music controls disabled (BLE HID removed)
+    lv_obj_add_event_cb(btn_prev, [](lv_event_t *e) {}, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t *btn_play = lv_btn_create(parent);
     lv_obj_set_size(btn_play, 56, 56);
@@ -290,9 +289,7 @@ static void music_page_create(lv_obj_t *parent) {
     lv_obj_set_style_text_font(lbl_play, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(lbl_play, lv_color_hex(0x000000), 0);
     lv_obj_center(lbl_play);
-    lv_obj_add_event_cb(btn_play, [](lv_event_t *e) {
-        ble_hid_play_pause();
-    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(btn_play, [](lv_event_t *e) {}, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t *btn_next = lv_btn_create(parent);
     lv_obj_set_size(btn_next, 48, 48);
@@ -303,11 +300,9 @@ static void music_page_create(lv_obj_t *parent) {
     lv_label_set_text(lbl_next, ">|");
     lv_obj_set_style_text_font(lbl_next, &lv_font_montserrat_16, 0);
     lv_obj_center(lbl_next);
-    lv_obj_add_event_cb(btn_next, [](lv_event_t *e) {
-        ble_hid_next_track();
-    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(btn_next, [](lv_event_t *e) {}, LV_EVENT_CLICKED, NULL);
 
-    // Volume controls
+    // Volume controls (disabled without BLE HID)
     lv_obj_t *btn_vol_down = lv_btn_create(parent);
     lv_obj_set_size(btn_vol_down, 50, 40);
     lv_obj_align(btn_vol_down, LV_ALIGN_CENTER, -35, 55);
@@ -317,9 +312,7 @@ static void music_page_create(lv_obj_t *parent) {
     lv_label_set_text(lbl_vd, "-");
     lv_obj_set_style_text_font(lbl_vd, &lv_font_montserrat_16, 0);
     lv_obj_center(lbl_vd);
-    lv_obj_add_event_cb(btn_vol_down, [](lv_event_t *e) {
-        ble_hid_volume_down();
-    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(btn_vol_down, [](lv_event_t *e) {}, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t *btn_vol_up = lv_btn_create(parent);
     lv_obj_set_size(btn_vol_up, 50, 40);
@@ -330,9 +323,7 @@ static void music_page_create(lv_obj_t *parent) {
     lv_label_set_text(lbl_vu, "+");
     lv_obj_set_style_text_font(lbl_vu, &lv_font_montserrat_16, 0);
     lv_obj_center(lbl_vu);
-    lv_obj_add_event_cb(btn_vol_up, [](lv_event_t *e) {
-        ble_hid_volume_up();
-    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(btn_vol_up, [](lv_event_t *e) {}, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t *hint = lv_label_create(parent);
     lv_label_set_text(hint, "Connect phone to use");
@@ -391,7 +382,8 @@ void ui_update_watchface(const ui_telemetry_t *t) {
         lv_obj_set_style_bg_color(battery_bar,
             batt < 20 ? lv_color_hex(0xff3333) :
             batt < 50 ? lv_color_hex(0xffaa00) : lv_color_hex(0x00d4ff), 0);
-        ble_srv_update_battery(batt);
+
+
     } else if (!t->batt_valid && last_batt != -2) {
         last_batt = -2;
         lv_label_set_text(battery_label, "USB");

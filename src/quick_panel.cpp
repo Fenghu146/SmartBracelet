@@ -2,11 +2,9 @@
 #include "quick_panel.h"
 #include "backlight.h"
 #include "nvs_store.h"
-#include "service/ble_srv.h"
 #include "service/wifi_ntp.h"
 #include "debug_log.h"
 #include "pin_config.h"
-#include <BLEDevice.h>
 #include <stdio.h>
 
 static lv_obj_t *qp_overlay = nullptr;
@@ -14,16 +12,13 @@ static lv_obj_t *qp_container = nullptr;
 static lv_obj_t *qp_time = nullptr;
 static lv_obj_t *qp_batt = nullptr;
 static lv_obj_t *qp_wifi_btn = nullptr;
-static lv_obj_t *qp_ble_btn = nullptr;
 static lv_obj_t *qp_dnd_btn = nullptr;
 static lv_obj_t *qp_wifi_lbl = nullptr;
-static lv_obj_t *qp_ble_lbl = nullptr;
 static lv_obj_t *qp_dnd_lbl = nullptr;
 static lv_obj_t *qp_slider = nullptr;
 static lv_obj_t *qp_slider_lbl = nullptr;
 static bool qp_visible = false;
 static bool qp_wifi = false;
-static bool qp_ble = true;
 static bool qp_dnd = false;
 
 static void qp_overlay_click(lv_event_t *e) {
@@ -59,16 +54,10 @@ static void qp_on_wifi(lv_event_t *e) {
     update_toggle_style(qp_wifi_btn, qp_wifi_lbl, qp_wifi);
 }
 
-static void qp_on_ble(lv_event_t *e) {
-    qp_ble = !qp_ble;
-    if (qp_ble) BLEDevice::startAdvertising(); else BLEDevice::stopAdvertising();
-    update_toggle_style(qp_ble_btn, qp_ble_lbl, qp_ble);
-}
-
 static void qp_on_dnd(lv_event_t *e) {
     qp_dnd = !qp_dnd;
     nvs_set_dnd(qp_dnd);
-    ble_srv_set_dnd(qp_dnd);
+    nvs_set_dnd(qp_dnd);
     lv_obj_set_style_bg_color(qp_dnd_btn, qp_dnd ? lv_color_hex(0xffaa00) : lv_color_hex(0x2a2a45), 0);
     lv_obj_set_style_text_color(qp_dnd_lbl, qp_dnd ? lv_color_hex(0x000000) : lv_color_hex(0x888899), 0);
     lv_label_set_text(qp_dnd_lbl, qp_dnd ? "DND ON" : "DND");
@@ -117,8 +106,7 @@ void quick_panel_init(void) {
     qp_wifi = wifi_is_powered();
 
     qp_mk_btn(qp_container, &qp_wifi_btn, &qp_wifi_lbl, "WiFi", qp_wifi, 0, 30, qp_on_wifi);
-    qp_mk_btn(qp_container, &qp_ble_btn, &qp_ble_lbl, "BLE", qp_ble, 72, 30, qp_on_ble);
-    qp_mk_btn(qp_container, &qp_dnd_btn, &qp_dnd_lbl, qp_dnd ? "DND ON" : "DND", qp_dnd, 144, 30, qp_on_dnd);
+    qp_mk_btn(qp_container, &qp_dnd_btn, &qp_dnd_lbl, qp_dnd ? "DND ON" : "DND", qp_dnd, 72, 30, qp_on_dnd);
 
     lv_obj_t *st = lv_label_create(qp_container);
     lv_label_set_text(st, "Brightness");
@@ -163,12 +151,12 @@ void quick_panel_hide(void) {
 bool quick_panel_is_visible(void) { return qp_visible; }
 
 void quick_panel_update(int hour, int minute, int batt_pct, bool wifi_on, bool ble_on) {
+    (void)ble_on;
     if (!qp_visible) return;
     char ts[8]; snprintf(ts, sizeof(ts), "%02d:%02d", hour, minute);
     lv_label_set_text(qp_time, ts);
     char bs[8]; snprintf(bs, sizeof(bs), "%d%%", batt_pct);
     lv_label_set_text(qp_batt, bs);
-    qp_wifi = wifi_on; qp_ble = ble_on;
+    qp_wifi = wifi_on;
     update_toggle_style(qp_wifi_btn, qp_wifi_lbl, qp_wifi);
-    update_toggle_style(qp_ble_btn, qp_ble_lbl, qp_ble);
 }

@@ -1,9 +1,8 @@
-// Voice Chat LVGL page â€?displays conversation from phone
+// Voice Chat LVGL page ï¿½?displays conversation from phone
 // Phone records audio + calls cloud APIs, watch just shows results
 
 #include "voice_chat_ui.h"
 #include "service/voice_chat.h"
-#include "service/ble_srv.h"
 #include <lvgl.h>
 
 LV_FONT_DECLARE(lv_font_simsun_16_cjk);
