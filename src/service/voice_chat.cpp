@@ -1,15 +1,14 @@
-// Voice chat service �?receives commands from phone via BLE
+// Voice chat service — receives commands from phone via serial
 // Phone records audio, calls cloud APIs, sends results back
 
 #include "voice_chat.h"
-#include "ble_srv.h"
 
 static volatile voice_state_t voice_state = VOICE_IDLE;
 static char response_text[512] = {0};
 static char transcription[256] = {0};
 
-// BLE voice command handler
-static void on_voice_cmd(const char *cmd, const char *arg) {
+// Called from serial_protocol when a voice command arrives
+void voice_chat_on_command(const char *cmd, const char *arg) {
     if (strcmp(cmd, "start") == 0) {
         voice_state = VOICE_RECORDING;
         USBSerial.println("Voice: phone started recording");
@@ -17,7 +16,6 @@ static void on_voice_cmd(const char *cmd, const char *arg) {
         voice_state = VOICE_WAITING;
         USBSerial.println("Voice: phone stopped recording, processing...");
     } else if (strcmp(cmd, "result") == 0) {
-        // arg contains "transcription|response"
         const char *sep = strchr(arg, '|');
         if (sep) {
             int trans_len = sep - arg;
@@ -39,8 +37,7 @@ static void on_voice_cmd(const char *cmd, const char *arg) {
 }
 
 void voice_chat_init(void) {
-    ble_srv_set_voice_cmd_callback(on_voice_cmd);
-    USBSerial.println("Voice chat: ready (phone-initiated)");
+    USBSerial.println("Voice chat: ready (serial-initiated)");
 }
 
 voice_state_t voice_chat_get_state(void) { return voice_state; }
