@@ -26,7 +26,7 @@ class XiaozhiClient:
         if self.on_log:
             self.on_log(msg)
 
-    def connect(self, url: str, token: str = "", timeout: float = 10.0) -> bool:
+    def connect(self, url: str, token: str = "", timeout: float = 15.0) -> bool:
         if self.ws:
             self.disconnect()
 
@@ -34,11 +34,22 @@ class XiaozhiClient:
         result_holder = [None]
         event = threading.Event()
 
+        # Build WebSocket headers for XiaoZhi protocol
+        headers = {
+            "Protocol-Version": "1",
+            "Device-Id": "smartbracelet-pc",
+            "Client-Id": "smartbracelet-monitor",
+        }
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        header_list = [f"{k}: {v}" for k, v in headers.items()]
+
         def on_open(ws):
             self._log(f"WebSocket opened: {url}")
             hello = {
                 "type": "hello",
-                "version": 2,
+                "version": 1,
                 "transport": "websocket",
                 "audio_params": {
                     "format": "opus",
@@ -75,6 +86,7 @@ class XiaozhiClient:
 
         self.ws = websocket.WebSocketApp(
             url,
+            header=header_list,
             on_open=on_open,
             on_message=on_message,
             on_error=on_error,
