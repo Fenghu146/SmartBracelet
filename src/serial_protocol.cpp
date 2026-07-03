@@ -39,6 +39,36 @@ void serial_push_event(const char *type, const char *msg) {
     USBSerial.println();
 }
 
+// --- Audio push functions (voice assistant) ---
+
+void serial_push_audio_start(int total_bytes) {
+    JsonDocument doc;
+    doc["e"] = "va";
+    doc["s"] = "start";
+    doc["len"] = total_bytes;
+    serializeJson(doc, USBSerial);
+    USBSerial.println();
+}
+
+void serial_push_audio_chunk(int seq, const char *b64) {
+    JsonDocument doc;
+    doc["e"] = "va";
+    doc["s"] = "data";
+    doc["seq"] = seq;
+    doc["d"] = b64;
+    serializeJson(doc, USBSerial);
+    USBSerial.println();
+}
+
+void serial_push_audio_end(int last_seq) {
+    JsonDocument doc;
+    doc["e"] = "va";
+    doc["s"] = "end";
+    doc["seq"] = last_seq;
+    serializeJson(doc, USBSerial);
+    USBSerial.println();
+}
+
 static void dispatch_command(const char *cmd, JsonDocument &doc) {
     if (strcmp(cmd, "notify") == 0) {
         const char *app = doc["app"];
@@ -82,8 +112,21 @@ static void dispatch_command(const char *cmd, JsonDocument &doc) {
         const char *vc = doc["vc"];
         const char *arg = doc["arg"];
         if (vc) {
-            extern void voice_chat_on_command(const char *cmd, const char *arg);
-            voice_chat_on_command(vc, arg ? arg : "");
+            // New: voice assistant audio result from desktop app ASR + AI pipeline
+            if (strcmp(vc, "va_result") == 0) {
+                const char *trans = doc["trans"] | "";
+                const char *resp = doc["resp"] | "";
+                extern void va_on_result(const char *, const char *);
+                va_on_result(trans, resp);
+            } else if (strcmp(vc, "va_error") == 0) {
+                const char *msg = doc["msg"] | "Unknown error";
+                extern void va_on_error(const char *);
+                va_on_error(msg);
+            } else {
+                // Legacy phone-initiated voice chat (keep for backward compat)
+                extern void voice_chat_on_command(const char *cmd, const char *arg);
+                voice_chat_on_command(vc, arg ? arg : "");
+            }
         }
     } else {
         LOG_DEBUG("Serial unknown cmd: %s", cmd);

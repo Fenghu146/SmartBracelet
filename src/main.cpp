@@ -16,6 +16,7 @@
 #include "weather.h"
 #include "service/audio.h"
 #include "service/voice_chat.h"
+#include "service/voice_assistant.h"
 #include "voice_chat_ui.h"
 #include "service/ota_update.h"
 #include "fall_detect.h"
@@ -204,6 +205,7 @@ static void setup_display(void) {
 static void setup_modules(void) {
     audio_init();
     voice_chat_init();
+    va_init();
     fall_detect_init();
     step_counter_init();
     wrist_detect_init();
@@ -486,20 +488,30 @@ static void loop_boot_button(void) {
     }
 
     if (long_press) {
-        reset_activity_timer();
-        current_face = watch_face_next(current_face);
-        nvs_set_watch_face(current_face);
-        if (current_face == FACE_ANALOG) {
-            lv_scr_load(pages[PAGE_ANALOG]);
-        } else if (current_face == FACE_SPORT) {
-            lv_scr_load(sport_page);
+        // If recording, long press dismisses
+        if (va_get_state() != VA_IDLE) {
+            va_dismiss();
+            LOG_INFO("BOOT long press: voice dismissed");
         } else {
-            lv_scr_load(pages[PAGE_DIGITAL]);
+            reset_activity_timer();
+            current_face = watch_face_next(current_face);
+            nvs_set_watch_face(current_face);
+            if (current_face == FACE_ANALOG) {
+                lv_scr_load(pages[PAGE_ANALOG]);
+            } else if (current_face == FACE_SPORT) {
+                lv_scr_load(sport_page);
+            } else {
+                lv_scr_load(pages[PAGE_DIGITAL]);
+            }
+            LOG_INFO("BOOT long press: face=%s", watch_face_name(current_face));
         }
-        LOG_INFO("BOOT long press: face=%s", watch_face_name(current_face));
     } else {
         reset_activity_timer();
-        if (screen_is_on()) {
+        // If recording, short press stops recording
+        if (va_get_state() == VA_RECORDING) {
+            va_stop_recording();
+            LOG_INFO("BOOT short press: stop recording");
+        } else if (screen_is_on()) {
             set_backlight(false);
         } else {
             set_backlight(true);
@@ -547,6 +559,7 @@ void loop() {
     lv_timer_handler();
     wifi_ntp_loop();
     loop_serial_commands();
+    va_process();
     loop_communication();
     loop_telemetry();
     loop_power_management();
