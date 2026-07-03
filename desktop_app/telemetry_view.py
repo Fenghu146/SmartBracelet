@@ -7,11 +7,14 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QFont, QTextCursor, QColor, QTextCharFormat
 import pyqtgraph as pg
+import base64
 import json
+import threading
 import time as time_module
 
 from serial_io import SerialIO, TelemetryData
 from mimo_client import MimoClient
+from audio_processor import adpcm_decode, pcm_to_wav, transcribe_audio
 
 MAX_HISTORY = 300
 
@@ -32,6 +35,62 @@ class HistoryBuffer:
         return zip(*self.data) if len(self.data[0]) == 2 else ([], [])
 
 
+class VoicePipeline:
+    """Reassemble ADPCM chunks from watch, decode, send to ASR, then AI."""
+
+    def __init__(self, window: 'MainWindow'):
+        self.window = window
+        self.chunks: dict[int, bytes] = {}
+        self.total_bytes = 0
+        self.adpcm_data = b''
+
+    def handle_start(self, total: int):
+        self.chunks.clear()
+        self.total_bytes = total
+        self.adpcm_data = b''
+        self.window.va_status.setText("Receiving audio from watch...")
+        self.window.va_progress.setText(f"Expected: {total} ADPCM bytes")
+        self.window._on_log(f"[VA] Audio start: {total} ADPCM bytes")
+
+    def handle_chunk(self, seq: int, b64_data: str):
+        try:
+            raw = base64.b64decode(b64_data)
+            self.chunks[seq] = raw
+            count = len(self.chunks)
+            self.window.va_progress.setText(f"Received {count} chunks ({count * 1024} bytes)")
+        except Exception as e:
+            self.window._on_log(f"[VA] Chunk {seq} decode error: {e}")
+
+    def handle_end(self, last_seq: int):
+        self.window._on_log(f"[VA] Audio end: {len(self.chunks)} chunks")
+        self.window.va_status.setText("Processing audio...")
+        try:
+            # Reassemble in order
+            self.adpcm_data = b''.join(
+                self.chunks[i] for i in range(last_seq + 1) if i in self.chunks
+            )
+            # Decode ADPCM to PCM
+            pcm = adpcm_decode(self.adpcm_data)
+            # Create WAV
+            wav_bytes = pcm_to_wav(pcm, sample_rate=16000)
+            # Transcribe in background thread
+            self.window.va_status.setText("Sending to ASR...")
+            threading.Thread(target=self._run_asr, args=(wav_bytes,), daemon=True).start()
+        except Exception as e:
+            self.window._on_log(f"[VA] Processing error: {e}")
+            self.window.signals.asr_error.emit(f"Processing error: {e}")
+
+    def _run_asr(self, wav_bytes: bytes):
+        api_key = self.window.mimo_api_key.text().strip()
+        base_url = self.window.mimo_base_url.text().strip()
+        model = "whisper-1"
+        result = transcribe_audio(wav_bytes, api_key=api_key, base_url=base_url, model=model)
+        if result:
+            self.window.signals.asr_result.emit(result)
+        else:
+            self.window.signals.asr_error.emit("ASR transcription failed (check API key & model)")
+
+
 class TelemetrySignals(QObject):
     telemetry = pyqtSignal(TelemetryData)
     event = pyqtSignal(str, str)
@@ -41,6 +100,12 @@ class TelemetrySignals(QObject):
     mimo_done = pyqtSignal(str)
     mimo_error = pyqtSignal(str)
     mimo_log = pyqtSignal(str)
+    # Voice assistant audio signals
+    audio_start = pyqtSignal(int)          # total ADPCM bytes
+    audio_chunk = pyqtSignal(int, str)     # seq, base64 data
+    audio_end = pyqtSignal(int)            # last seq
+    asr_result = pyqtSignal(str)           # transcription
+    asr_error = pyqtSignal(str)            # error message
 
 
 class GlassValue(QLabel):
@@ -84,6 +149,7 @@ class MainWindow(QMainWindow):
         self.hist_calories = HistoryBuffer()
 
         self.chat_history: list[dict] = []
+        self.voice_pipeline = VoicePipeline(self)
 
         self._build_ui()
         self._connect_signals()
@@ -378,6 +444,21 @@ class MainWindow(QMainWindow):
         al.addLayout(r2)
         right.addWidget(acts)
 
+        # Voice Assistant status (watch mic → ASR → AI)
+        va_card = self._glass_card("Watch Voice Assistant")
+        va = QVBoxLayout(va_card)
+        va.setSpacing(4)
+
+        self.va_status = QLabel("Waiting for audio from watch...")
+        self.va_status.setStyleSheet("color: #7f8c8d; font-weight: 600; font-size: 12px;")
+        va.addWidget(self.va_status)
+
+        self.va_progress = QLabel("")
+        self.va_progress.setStyleSheet("color: #95a5a6; font-size: 11px;")
+        va.addWidget(self.va_progress)
+
+        right.addWidget(va_card)
+
         log_g = self._glass_card("Protocol Log")
         ll = QVBoxLayout(log_g)
         self.mimo_log_view = QTextEdit()
@@ -473,6 +554,11 @@ class MainWindow(QMainWindow):
         self.signals.mimo_done.connect(self._on_mimo_done)
         self.signals.mimo_error.connect(self._on_mimo_error)
         self.signals.mimo_log.connect(self._on_mimo_log)
+        self.signals.audio_start.connect(self.voice_pipeline.handle_start)
+        self.signals.audio_chunk.connect(self.voice_pipeline.handle_chunk)
+        self.signals.audio_end.connect(self.voice_pipeline.handle_end)
+        self.signals.asr_result.connect(self._on_asr_result)
+        self.signals.asr_error.connect(self._on_asr_error)
 
     # ── Serial ──
     def _scan_ports(self):
@@ -500,6 +586,9 @@ class MainWindow(QMainWindow):
         self.serial.on_telemetry = lambda t: self.signals.telemetry.emit(t)
         self.serial.on_event = lambda evt, msg: self.signals.event.emit(evt, msg)
         self.serial.on_log = lambda msg: self.signals.log.emit(msg)
+        self.serial.on_audio_start = lambda total: self.signals.audio_start.emit(total)
+        self.serial.on_audio_chunk = lambda seq, data: self.signals.audio_chunk.emit(seq, data)
+        self.serial.on_audio_end = lambda last_seq: self.signals.audio_end.emit(last_seq)
         if self.serial.start():
             self.signals.connected.emit(True)
 
@@ -619,6 +708,61 @@ class MainWindow(QMainWindow):
         arg = f"{transcription}|{response}"
         cmd = json.dumps({"c": "voice", "vc": "result", "arg": arg}, ensure_ascii=False)
         self._send_raw(cmd)
+
+    # ── Voice Assistant (ASR) ──
+    def _on_asr_result(self, transcription: str):
+        """Handle ASR transcription result from watch audio."""
+        self.va_status.setText("ASR done → sending to AI")
+        self.va_progress.setText(transcription[:50] + ("..." if len(transcription) > 50 else ""))
+        self._append_chat("You", transcription, "#4a90d9")
+        self._on_log(f"[ASR] {transcription}")
+        # Send transcription to MiMo AI for response
+        self._last_user_text = transcription
+        self.mimo_busy = True
+        self.send_chat_btn.setEnabled(False)
+        self.btn_abort.setEnabled(True)
+        self.mimo_status.setText("Thinking...")
+        self._ai_text_buf = ""
+        self.mimo.on_chunk = lambda chunk: self.signals.mimo_chunk.emit(chunk)
+        self.mimo.on_done = lambda full: self._on_mimo_done_asr(full, transcription)
+        self.mimo.on_error = lambda msg: self.signals.mimo_error.emit(msg)
+        self.mimo.on_log = lambda msg: self.signals.mimo_log.emit(msg)
+        api_key = self.mimo_api_key.text().strip()
+        model = self.mimo_model.text().strip() or "mimo-v2.5"
+        base_url = self.mimo_base_url.text().strip()
+        self.mimo.send(transcription, api_key=api_key, model=model, base_url=base_url)
+
+    def _on_asr_error(self, msg: str):
+        """Handle ASR error from watch audio processing."""
+        self.va_status.setText("ASR Error")
+        self.va_progress.setText(msg)
+        self._on_log(f"[ASR Error] {msg}")
+        if self.connected:
+            cmd = json.dumps({
+                "c": "voice",
+                "vc": "va_error",
+                "msg": msg,
+            }, ensure_ascii=False)
+            self._send_raw(cmd)
+
+    def _on_mimo_done_asr(self, full: str, transcription: str):
+        """MiMo AI done from ASR pipeline — forward result to watch."""
+        self.mimo_busy = False
+        self.send_chat_btn.setEnabled(True)
+        self.btn_abort.setEnabled(False)
+        self.mimo_status.setText("Idle")
+        self.chat_history.append({"role": "AI", "text": full})
+        if self.send_to_watch_cb.isChecked() and self.connected:
+            self.va_status.setText("Forwarding result to watch...")
+            cmd = json.dumps({
+                "c": "voice",
+                "vc": "va_result",
+                "trans": transcription,
+                "resp": full,
+            }, ensure_ascii=False)
+            self._send_raw(cmd)
+        self.va_status.setText("Result sent ✓")
+        self.va_progress.setText("")
 
     # ── Console ──
     def _send_command(self):

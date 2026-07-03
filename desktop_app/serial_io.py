@@ -47,6 +47,9 @@ class SerialIO(threading.Thread):
         self.on_telemetry: Optional[Callable[[TelemetryData], None]] = None
         self.on_event: Optional[Callable[[str, str], None]] = None
         self.on_log: Optional[Callable[[str], None]] = None
+        self.on_audio_start: Optional[Callable[[int], None]] = None      # total ADPCM bytes
+        self.on_audio_chunk: Optional[Callable[[int, str], None]] = None  # seq, base64
+        self.on_audio_end: Optional[Callable[[int], None]] = None         # last seq
         self._lock = threading.Lock()
 
     def start(self):
@@ -114,6 +117,21 @@ class SerialIO(threading.Thread):
                 t.update(d)
                 if self.on_telemetry:
                     self.on_telemetry(t)
+            elif evt == "va":
+                sub = d.get("s", "")
+                if sub == "start":
+                    total = d.get("len", 0)
+                    if self.on_audio_start:
+                        self.on_audio_start(total)
+                elif sub == "data":
+                    seq = d.get("seq", 0)
+                    data = d.get("d", "")
+                    if self.on_audio_chunk:
+                        self.on_audio_chunk(seq, data)
+                elif sub == "end":
+                    last_seq = d.get("seq", 0)
+                    if self.on_audio_end:
+                        self.on_audio_end(last_seq)
             elif evt:
                 msg = d.get("msg", "")
                 if self.on_event:
