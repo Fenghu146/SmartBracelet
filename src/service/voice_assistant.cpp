@@ -21,6 +21,8 @@
 #define VA_SEND_INTERVAL_MS     100
 // Auto-return to IDLE from ERROR (ms)
 #define VA_ERROR_TIMEOUT_MS     4000
+// Max time to wait for PC result before timing out (ms)
+#define VA_WAIT_TIMEOUT_MS      30000
 
 // ============================================================
 // Internal state
@@ -34,6 +36,7 @@ static int              g_adpcm_total = 0;      // total bytes when recording st
 static int              g_send_seq = 0;         // current chunk sequence
 static int              g_send_total = 0;       // total chunks to send
 static unsigned long    g_rec_start_ms = 0;
+static unsigned long    g_wait_start_ms = 0;
 static unsigned long    g_error_start_ms = 0;
 static char             g_transcription[512] = "";
 static char             g_response[1024] = "";
@@ -177,6 +180,7 @@ void va_process(void) {
         if (g_send_seq >= g_send_total) {
             // All chunks sent
             serial_push_audio_end(g_send_seq - 1);
+            g_wait_start_ms = millis();
             g_state = VA_WAITING;
             LOG_INFO("VA: all %d chunks sent, waiting for result", g_send_total);
             break;
@@ -214,7 +218,11 @@ void va_process(void) {
     }
 
     case VA_WAITING:
-        // Nothing to do; va_on_result/va_on_error will transition state
+        // Timeout: if PC doesn't respond in time, cancel
+        if (millis() - g_wait_start_ms >= VA_WAIT_TIMEOUT_MS) {
+            LOG_WARN("VA: wait timeout (%d ms)", VA_WAIT_TIMEOUT_MS);
+            va_on_error("Response timeout");
+        }
         break;
 
     case VA_RESPONSE:

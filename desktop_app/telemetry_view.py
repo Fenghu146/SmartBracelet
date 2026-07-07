@@ -368,7 +368,7 @@ class MainWindow(QMainWindow):
         self.mimo_model = QLineEdit("mimo-v2.5")
         mrow.addWidget(self.mimo_model, 1)
         mrow.addWidget(GlassLabel("Base URL"))
-        self.mimo_base_url = QLineEdit("https://platform.xiaomimimo.com/v1")
+        self.mimo_base_url = QLineEdit("https://api.xiaomimimo.com/v1")
         mrow.addWidget(self.mimo_base_url, 2)
         cl.addLayout(mrow)
 
