@@ -541,7 +541,11 @@ static void loop_pwr_button(void) {
     } else if (pmu.isPekeyShortPressIrq()) {
         pmu.clearIrqStatus();
         reset_activity_timer();
-        if (quick_panel_is_visible()) {
+        // If voice assistant is active, cancel it
+        if (va_get_state() != VA_IDLE) {
+            va_dismiss();
+            LOG_INFO("PWR short press: voice cancelled");
+        } else if (quick_panel_is_visible()) {
             quick_panel_hide();
         } else {
             quick_panel_show();

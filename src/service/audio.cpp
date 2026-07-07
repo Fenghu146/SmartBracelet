@@ -157,6 +157,7 @@ static bool i2s_init_tx(void) {
 static volatile bool rx_recording = false;
 static RingbufHandle_t rx_ringbuf = NULL;
 static TaskHandle_t rx_task_handle = NULL;
+static bool rx_initialized = false;  // guard against double init
 
 #define RX_DMA_BUF_COUNT 4
 #define RX_DMA_BUF_LEN   1024  // samples per DMA buffer
@@ -186,6 +187,11 @@ static void voice_rx_task(void *param) {
 }
 
 bool audio_init_rx(void) {
+  if (rx_initialized) {
+    LOG_INFO("I2S_RX: already initialized");
+    return true;
+  }
+
   // Configure INMP441 LRS pin as output LOW (left channel)
   pinMode(INMP441_LRS, OUTPUT);
   digitalWrite(INMP441_LRS, LOW);
@@ -216,16 +222,21 @@ bool audio_init_rx(void) {
   i2s_stop(I2S_NUM_1);  // install but don't start yet
 
   rx_ringbuf = xRingbufferCreate(RX_RINGBUF_SIZE, RINGBUF_TYPE_BYTEBUF);
+  rx_initialized = true;
   LOG_INFO("I2S_RX: INMP441 ready (ringbuf %d bytes)", RX_RINGBUF_SIZE);
   return true;
 }
 
 bool audio_start_recording(void) {
   if (rx_recording) return false;
-  // Reset ring buffer
+  // Drain ring buffer
   if (rx_ringbuf) {
-    vRingbufferDelete(rx_ringbuf);
-    rx_ringbuf = xRingbufferCreate(RX_RINGBUF_SIZE, RINGBUF_TYPE_BYTEBUF);
+    size_t item_size;
+    void *item = xRingbufferReceive(rx_ringbuf, &item_size, 0);
+    while (item) {
+      vRingbufferReturnItem(rx_ringbuf, item);
+      item = xRingbufferReceive(rx_ringbuf, &item_size, 0);
+    }
   }
 
   rx_recording = true;

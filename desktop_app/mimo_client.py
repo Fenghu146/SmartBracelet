@@ -22,7 +22,7 @@ class MimoClient:
             self.on_log(msg)
 
     def send(self, text: str, api_key: str = "", model: str = "mimo-v2.5",
-             base_url: str = "https://platform.xiaomimimo.com/v1",
+             base_url: str = "https://api.xiaomimimo.com/v1",
              system_prompt: str = "You are a helpful voice assistant."):
         if self._busy:
             self._log("Already busy, abort first")

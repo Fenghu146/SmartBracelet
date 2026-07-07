@@ -2,6 +2,7 @@
 #include <ArduinoJson.h>
 #include "debug_log.h"
 #include "service/ota_update.h"
+#include "service/voice_assistant.h"
 #include "nvs_store.h"
 #include "notif_history.h"
 #include "service/voice_chat.h"
@@ -116,15 +117,12 @@ static void dispatch_command(const char *cmd, JsonDocument &doc) {
             if (strcmp(vc, "va_result") == 0) {
                 const char *trans = doc["trans"] | "";
                 const char *resp = doc["resp"] | "";
-                extern void va_on_result(const char *, const char *);
                 va_on_result(trans, resp);
             } else if (strcmp(vc, "va_error") == 0) {
                 const char *msg = doc["msg"] | "Unknown error";
-                extern void va_on_error(const char *);
                 va_on_error(msg);
             } else {
                 // Legacy phone-initiated voice chat (keep for backward compat)
-                extern void voice_chat_on_command(const char *cmd, const char *arg);
                 voice_chat_on_command(vc, arg ? arg : "");
             }
         }
