@@ -151,6 +151,10 @@ class MainWindow(QMainWindow):
         self.chat_history: list[dict] = []
         self.voice_pipeline = VoicePipeline(self)
 
+        # Fall alert state
+        self._fall_alert_active = False
+        self._fall_alert_flash = False
+
         self._build_ui()
         self._connect_signals()
 
@@ -218,6 +222,45 @@ class MainWindow(QMainWindow):
         tb.addWidget(help_lbl)
 
         vbox.addLayout(tb)
+
+        # Fall alert banner (hidden by default)
+        self.fall_banner = QFrame()
+        self.fall_banner.setStyleSheet("""
+            QFrame {
+                background: #e74c3c;
+                border-radius: 8px;
+                padding: 6px 12px;
+            }
+        """)
+        self.fall_banner.setVisible(False)
+        fb_row = QHBoxLayout(self.fall_banner)
+        fb_row.setContentsMargins(8, 4, 8, 4)
+
+        self.fall_icon = QLabel("⚠")
+        self.fall_icon.setStyleSheet("color: white; font-size: 18px; font-weight: bold;")
+        fb_row.addWidget(self.fall_icon)
+
+        self.fall_msg = QLabel("FALL DETECTED!")
+        self.fall_msg.setStyleSheet("color: white; font-size: 14px; font-weight: bold;")
+        fb_row.addWidget(self.fall_msg, 1)
+
+        self.fall_ack_btn = QPushButton("ACK")
+        self.fall_ack_btn.setFixedSize(50, 24)
+        self.fall_ack_btn.setStyleSheet("""
+            QPushButton {
+                background: white; color: #e74c3c; font-weight: bold;
+                border-radius: 12px; font-size: 11px;
+            }
+            QPushButton:hover { background: #fdd; }
+        """)
+        self.fall_ack_btn.clicked.connect(self._acknowledge_fall)
+        fb_row.addWidget(self.fall_ack_btn)
+
+        vbox.addWidget(self.fall_banner)
+
+        # Flash timer for fall alert
+        self.fall_flash_timer = QTimer()
+        self.fall_flash_timer.timeout.connect(self._flash_fall_banner)
 
         self.tabs = QTabWidget()
         vbox.addWidget(self.tabs, 1)
@@ -825,7 +868,43 @@ class MainWindow(QMainWindow):
             p.setXRange(now - window, now, padding=0)
 
     def _on_event(self, evt: str, msg: str):
+        # Check for fall detection
+        if "FALL" in msg.upper():
+            self._trigger_fall_alert(msg)
+        # Always log events
         self._on_log(f"[EVENT] {evt}: {msg}")
+
+    # ── Fall alert ──
+    def _trigger_fall_alert(self, msg: str):
+        """Show and flash the fall detection banner."""
+        self._fall_alert_active = True
+        self._fall_alert_flash = False
+        self.fall_msg.setText(f"⚠ {msg}")
+        self.fall_banner.setVisible(True)
+        self.fall_banner.setStyleSheet("""
+            QFrame { background: #e74c3c; border-radius: 8px; padding: 6px 12px; }
+        """)
+        self.fall_flash_timer.start(500)
+        # Switch to overview tab so user sees it
+        self.tabs.setCurrentIndex(0)
+
+    def _flash_fall_banner(self):
+        """Toggle banner background between red and dark red for flashing effect."""
+        if not self._fall_alert_active:
+            self.fall_flash_timer.stop()
+            return
+        self._fall_alert_flash = not self._fall_alert_flash
+        bg = "#c0392b" if self._fall_alert_flash else "#e74c3c"
+        self.fall_banner.setStyleSheet(f"""
+            QFrame {{ background: {bg}; border-radius: 8px; padding: 6px 12px; }}
+        """)
+
+    def _acknowledge_fall(self):
+        """User acknowledged the fall alert — hide banner."""
+        self._fall_alert_active = False
+        self.fall_flash_timer.stop()
+        self.fall_banner.setVisible(False)
+        self._on_log("[FALL] Alert acknowledged by user")
 
     def _on_log(self, msg: str):
         self.log_view.append(msg)
