@@ -11,7 +11,6 @@
 #define WEATHER_REFRESH_MS 1800000 // 30 min cache
 #define WEATHER_LAT "39.9042"
 #define WEATHER_LON "116.4074"
-#define WEATHER_CITY "Beijing"
 
 static lv_obj_t *temp_label = nullptr;
 static lv_obj_t *humid_label = nullptr;
@@ -65,7 +64,7 @@ static void weather_fetch(void) {
       last_code = doc["current"]["weather_code"];
       has_data = true;
       last_fetch = millis();
-      LOG_INFO("Weather: %.1fC %d%% code=%d (" WEATHER_CITY ")",
+      LOG_INFO("Weather: %.1fC %d%% code=%d",
         last_temp, last_humid, last_code);
     } else {
       LOG_ERR("Weather: JSON error: %s", err.c_str());
@@ -81,7 +80,7 @@ void weather_create(lv_obj_t *parent) {
   lv_obj_set_style_bg_color(parent, lv_color_hex(0x0d0d1a), 0);
 
   lv_obj_t *title = lv_label_create(parent);
-  lv_label_set_text(title, "Weather " WEATHER_CITY);
+  lv_label_set_text(title, "Weather");
   lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
   lv_obj_set_style_text_color(title, lv_color_hex(0x00d4ff), 0);
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);

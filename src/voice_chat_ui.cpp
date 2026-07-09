@@ -66,7 +66,7 @@ void voice_chat_page_create(lv_obj_t *parent) {
     // Button label
     record_btn_label = lv_label_create(record_btn);
     lv_label_set_text(record_btn_label, "\xEE\x80\x80");   // default icon/char
-    lv_obj_set_style_text_font(record_btn_label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(record_btn_label, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(record_btn_label, lv_color_hex(0xFFFFFF), 0);
     lv_obj_center(record_btn_label);
 
