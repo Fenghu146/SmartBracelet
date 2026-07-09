@@ -113,7 +113,7 @@ static void status_bar_create(lv_obj_t *parent) {
     lv_label_set_text(battery_label, "--");
 
     page_dots = lv_label_create(parent);
-    lv_label_set_text(page_dots, "\xe2\x97\x8f \xe2\x97\x8b \xe2\x97\x8b \xe2\x97\x8b \xe2\x97\x8b \xe2\x97\x8b \xe2\x97\x8b \xe2\x97\x8b \xe2\x97\x8b \xe2\x97\x8b \xe2\x97\x8b");
+    lv_label_set_text(page_dots, "\xe2\x97\x8f \xe2\x97\x8b \xe2\x97\x8b \xe2\x97\x8b \xe2\x97\x8b \xe2\x97\x8b \xe2\x97\x8b \xe2\x97\x8b \xe2\x97\x8b");
     lv_obj_align(page_dots, LV_ALIGN_TOP_MID, 0, 4);
     lv_obj_set_style_text_font(page_dots, &lv_font_montserrat_10, 0);
     lv_obj_set_style_text_color(page_dots, lv_color_hex(0x555566), 0);
@@ -256,81 +256,6 @@ static void notif_page_create(lv_obj_t *parent) {
     lv_obj_set_scrollbar_mode(notif_list, LV_SCROLLBAR_MODE_AUTO);
 }
 
-// 鈹€鈹€ Music control page 鈹€鈹€
-static void music_page_create(lv_obj_t *parent) {
-    lv_obj_set_style_bg_color(parent, lv_color_hex(0x0d0d1a), 0);
-
-    lv_obj_t *title = lv_label_create(parent);
-    lv_label_set_text(title, "Music");
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(title, lv_color_hex(0x00d4ff), 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
-
-    // Transport controls
-    lv_obj_t *btn_prev = lv_btn_create(parent);
-    lv_obj_set_size(btn_prev, 48, 48);
-    lv_obj_align(btn_prev, LV_ALIGN_CENTER, -60, 0);
-    lv_obj_set_style_bg_color(btn_prev, lv_color_hex(0x1a1a2e), 0);
-    lv_obj_set_style_bg_opa(btn_prev, LV_OPA_COVER, 0);
-    lv_obj_t *lbl_prev = lv_label_create(btn_prev);
-    lv_label_set_text(lbl_prev, "|<");
-    lv_obj_set_style_text_font(lbl_prev, &lv_font_montserrat_16, 0);
-    lv_obj_center(lbl_prev);
-    // Music controls disabled (BLE HID removed)
-    lv_obj_add_event_cb(btn_prev, [](lv_event_t *e) {}, LV_EVENT_CLICKED, NULL);
-
-    lv_obj_t *btn_play = lv_btn_create(parent);
-    lv_obj_set_size(btn_play, 56, 56);
-    lv_obj_align(btn_play, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(btn_play, lv_color_hex(0x00d4ff), 0);
-    lv_obj_set_style_bg_opa(btn_play, LV_OPA_COVER, 0);
-    lv_obj_t *lbl_play = lv_label_create(btn_play);
-    lv_label_set_text(lbl_play, "||");
-    lv_obj_set_style_text_font(lbl_play, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(lbl_play, lv_color_hex(0x000000), 0);
-    lv_obj_center(lbl_play);
-    lv_obj_add_event_cb(btn_play, [](lv_event_t *e) {}, LV_EVENT_CLICKED, NULL);
-
-    lv_obj_t *btn_next = lv_btn_create(parent);
-    lv_obj_set_size(btn_next, 48, 48);
-    lv_obj_align(btn_next, LV_ALIGN_CENTER, 60, 0);
-    lv_obj_set_style_bg_color(btn_next, lv_color_hex(0x1a1a2e), 0);
-    lv_obj_set_style_bg_opa(btn_next, LV_OPA_COVER, 0);
-    lv_obj_t *lbl_next = lv_label_create(btn_next);
-    lv_label_set_text(lbl_next, ">|");
-    lv_obj_set_style_text_font(lbl_next, &lv_font_montserrat_16, 0);
-    lv_obj_center(lbl_next);
-    lv_obj_add_event_cb(btn_next, [](lv_event_t *e) {}, LV_EVENT_CLICKED, NULL);
-
-    // Volume controls (disabled without BLE HID)
-    lv_obj_t *btn_vol_down = lv_btn_create(parent);
-    lv_obj_set_size(btn_vol_down, 50, 40);
-    lv_obj_align(btn_vol_down, LV_ALIGN_CENTER, -35, 55);
-    lv_obj_set_style_bg_color(btn_vol_down, lv_color_hex(0x1a1a2e), 0);
-    lv_obj_set_style_bg_opa(btn_vol_down, LV_OPA_COVER, 0);
-    lv_obj_t *lbl_vd = lv_label_create(btn_vol_down);
-    lv_label_set_text(lbl_vd, "-");
-    lv_obj_set_style_text_font(lbl_vd, &lv_font_montserrat_16, 0);
-    lv_obj_center(lbl_vd);
-    lv_obj_add_event_cb(btn_vol_down, [](lv_event_t *e) {}, LV_EVENT_CLICKED, NULL);
-
-    lv_obj_t *btn_vol_up = lv_btn_create(parent);
-    lv_obj_set_size(btn_vol_up, 50, 40);
-    lv_obj_align(btn_vol_up, LV_ALIGN_CENTER, 35, 55);
-    lv_obj_set_style_bg_color(btn_vol_up, lv_color_hex(0x1a1a2e), 0);
-    lv_obj_set_style_bg_opa(btn_vol_up, LV_OPA_COVER, 0);
-    lv_obj_t *lbl_vu = lv_label_create(btn_vol_up);
-    lv_label_set_text(lbl_vu, "+");
-    lv_obj_set_style_text_font(lbl_vu, &lv_font_montserrat_16, 0);
-    lv_obj_center(lbl_vu);
-    lv_obj_add_event_cb(btn_vol_up, [](lv_event_t *e) {}, LV_EVENT_CLICKED, NULL);
-
-    lv_obj_t *hint = lv_label_create(parent);
-    lv_label_set_text(hint, "Connect phone to use");
-    lv_obj_set_style_text_font(hint, &lv_font_montserrat_10, 0);
-    lv_obj_set_style_text_color(hint, lv_color_hex(0x555566), 0);
-    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -26);
-}
 
 // 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 // Public API
@@ -338,7 +263,7 @@ static void music_page_create(lv_obj_t *parent) {
 
 void ui_pages_init(lv_obj_t **pages, int num_pages, CST816S *touch_dev) {
     // Pages: 0=watchface, 1=analog, 2=sensor, 3=notif, 4=stopwatch,
-    //        5=weather, 6=voice, 7=music
+    //        5=weather, 6=voice
     pages[0] = lv_obj_create(NULL); watchface_create(pages[0]);
     pages[1] = lv_obj_create(NULL); analog_watchface_create(pages[1]);
     pages[2] = lv_obj_create(NULL); sensor_page_create(pages[2]);
@@ -346,7 +271,7 @@ void ui_pages_init(lv_obj_t **pages, int num_pages, CST816S *touch_dev) {
     pages[4] = lv_obj_create(NULL); stopwatch_create(pages[4]);
     pages[5] = lv_obj_create(NULL); weather_create(pages[5]);
     pages[6] = lv_obj_create(NULL); voice_chat_page_create(pages[6]);
-    pages[7] = lv_obj_create(NULL); music_page_create(pages[7]);
+    // (page 7 was music — removed)
     status_bar_create(lv_layer_top());
     lv_scr_load(pages[0]);
 }

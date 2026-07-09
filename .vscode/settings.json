@@ -1,3 +1,4 @@
 {
-    "platformio-ide.customPythonPath": "C:\\Users\\35015\\miniconda3\\envs\\py312\\python.exe"
+    "platformio-ide.customPythonPath": "C:\\Users\\35015\\miniconda3\\envs\\py312\\python.exe",
+    "git.ignoreLimitWarning": true
 }
