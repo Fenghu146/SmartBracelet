@@ -45,7 +45,7 @@ static void on_goal_plus(lv_event_t *e) {
 
 static void on_bright_minus(lv_event_t *e) {
     brightness -= 10;
-    if (brightness < 10) brightness = 10;
+    if (brightness < 30) brightness = 30;
     nvs_set_brightness(brightness);
     lv_label_set_text_fmt(bright_label, "Bright: %d%%", brightness);
     backlight_set_level((brightness * 255) / 100);

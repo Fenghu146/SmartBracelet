@@ -19,7 +19,7 @@ void backlight_init(void) {
     // Apply saved brightness
     int pct = nvs_get_brightness();
     bl_current_level = (pct * 255) / 100;
-    if (bl_current_level < 10) bl_current_level = 10;
+    if (bl_current_level < 77) bl_current_level = 77;   // floor at 30%
     ledcWrite(BL_PWM_CH, bl_current_level);
 }
 
@@ -37,7 +37,7 @@ int backlight_get_level(void) {
 void backlight_on(void) {
     int pct = nvs_get_brightness();
     int level = (pct * 255) / 100;
-    if (level < 10) level = 10;
+    if (level < 77) level = 77;  // floor at 30%
     backlight_set_level(level);
     screen_on_state = true;
 }
