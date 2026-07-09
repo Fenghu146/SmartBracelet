@@ -123,7 +123,7 @@ void quick_panel_init(void) {
     lv_obj_align(qp_slider_lbl, LV_ALIGN_TOP_RIGHT, 0, 88);
 
     qp_slider = lv_slider_create(qp_container);
-    lv_slider_set_range(qp_slider, 10, 100);
+    lv_slider_set_range(qp_slider, 30, 100);
     lv_slider_set_value(qp_slider, cp, LV_ANIM_OFF);
     lv_obj_set_width(qp_slider, LV_PCT(100));
     lv_obj_align(qp_slider, LV_ALIGN_TOP_MID, 0, 108);
