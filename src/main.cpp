@@ -108,10 +108,6 @@ static uint16_t read_batt_voltage_raw(void) {
 static int read_batt_percent_raw(void) {
     return pmu.readRegister(0xA4);
 }
-static bool batt_is_valid(void) {
-    uint16_t mv = read_batt_voltage_raw();
-    return (mv >= 500 && mv <= 5000);
-}
 static bool is_charging(xpowers_chg_status_t cs) {
     return (cs == XPOWERS_AXP2101_CHG_CC_STATE ||
             cs == XPOWERS_AXP2101_CHG_PRE_STATE ||
@@ -134,6 +130,21 @@ static void switch_page(int dir) {
         200, 0, false);
 }
 
+// Apply a watch face: persist the choice and load its screen.
+// Shared by the touch long-press gesture and the BOOT button handler.
+static void apply_watch_face(int face) {
+    current_face = face;
+    nvs_set_watch_face(current_face);
+    if (current_face == FACE_ANALOG) {
+        lv_scr_load(pages[PAGE_ANALOG]);
+    } else if (current_face == FACE_SPORT) {
+        lv_scr_load(sport_page);
+    } else {
+        lv_scr_load(pages[PAGE_DIGITAL]);
+    }
+    LOG_INFO("Watch face: %s", watch_face_name(current_face));
+}
+
 static void handle_gesture(void) {
     int g = touch->data.gestureID;
     if (g == SWIPE_LEFT) switch_page(1);
@@ -141,16 +152,7 @@ static void handle_gesture(void) {
     else if (g == SWIPE_UP) { set_backlight(true); reset_activity_timer(); }
     else if (g == SWIPE_DOWN) { if (quick_panel_is_visible()) quick_panel_hide(); else quick_panel_show(); }
     else if (g == LONG_PRESS) {
-        current_face = watch_face_next(current_face);
-        nvs_set_watch_face(current_face);
-        if (current_face == FACE_ANALOG) {
-            lv_scr_load(pages[PAGE_ANALOG]);
-        } else if (current_face == FACE_SPORT) {
-            lv_scr_load(sport_page);
-        } else {
-            lv_scr_load(pages[PAGE_DIGITAL]);
-        }
-        LOG_INFO("Watch face: %s", watch_face_name(current_face));
+        apply_watch_face(watch_face_next(current_face));
     }
 }
 
@@ -494,16 +496,7 @@ static void loop_boot_button(void) {
             LOG_INFO("BOOT long press: voice dismissed");
         } else {
             reset_activity_timer();
-            current_face = watch_face_next(current_face);
-            nvs_set_watch_face(current_face);
-            if (current_face == FACE_ANALOG) {
-                lv_scr_load(pages[PAGE_ANALOG]);
-            } else if (current_face == FACE_SPORT) {
-                lv_scr_load(sport_page);
-            } else {
-                lv_scr_load(pages[PAGE_DIGITAL]);
-            }
-            LOG_INFO("BOOT long press: face=%s", watch_face_name(current_face));
+            apply_watch_face(watch_face_next(current_face));
         }
     } else {
         reset_activity_timer();

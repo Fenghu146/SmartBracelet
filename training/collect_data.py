@@ -18,6 +18,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 import argparse
 import csv
 import datetime
+import select
 import sys
 import serial
 import serial.tools.list_ports
@@ -28,6 +29,20 @@ LABEL_MAP = {
     '5': 'flick', '6': 'circle', '7': 'sit', '8': 'fall',
     '9': 'bike', '0': 'stairs',
 }
+
+
+def read_key_nonblocking():
+    """Return the next typed key, or None when no key is waiting.
+
+    select() does not work on the Windows console stdin, so use msvcrt
+    there and fall back to select() on POSIX platforms.
+    """
+    if os.name == 'nt':
+        import msvcrt
+        return msvcrt.getwch() if msvcrt.kbhit() else None
+    if select.select([sys.stdin], [], [], 0)[0]:
+        return sys.stdin.readline().strip()
+    return None
 
 
 def list_ports():
@@ -82,13 +97,12 @@ def main():
         try:
             while True:
                 # Check for keyboard input (non-blocking)
-                if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
-                    cmd = sys.stdin.readline().strip()
-                    if cmd == 'q':
-                        break
-                    elif cmd in LABEL_MAP:
-                        current_label = LABEL_MAP[cmd]
-                        print(f"  >>> Label set to: {current_label}")
+                cmd = read_key_nonblocking()
+                if cmd == 'q':
+                    break
+                if cmd in LABEL_MAP:
+                    current_label = LABEL_MAP[cmd]
+                    print(f"  >>> Label set to: {current_label}")
 
                 # Read serial line
                 line = ser.readline()
@@ -115,5 +129,4 @@ def main():
 
 
 if __name__ == '__main__':
-    import select
     main()

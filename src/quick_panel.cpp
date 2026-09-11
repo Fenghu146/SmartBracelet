@@ -57,7 +57,6 @@ static void qp_on_wifi(lv_event_t *e) {
 static void qp_on_dnd(lv_event_t *e) {
     qp_dnd = !qp_dnd;
     nvs_set_dnd(qp_dnd);
-    nvs_set_dnd(qp_dnd);
     lv_obj_set_style_bg_color(qp_dnd_btn, qp_dnd ? lv_color_hex(0xffaa00) : lv_color_hex(0x2a2a45), 0);
     lv_obj_set_style_text_color(qp_dnd_lbl, qp_dnd ? lv_color_hex(0x000000) : lv_color_hex(0x888899), 0);
     lv_label_set_text(qp_dnd_lbl, qp_dnd ? "DND ON" : "DND");

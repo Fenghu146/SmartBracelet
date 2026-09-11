@@ -80,6 +80,7 @@ class SerialIO(threading.Thread):
         d = {"c": cmd, **kwargs}
         self.send(json.dumps(d, ensure_ascii=False))
 
+    @staticmethod
     def list_ports() -> list:
         return [p.device for p in serial.tools.list_ports.comports()]
 

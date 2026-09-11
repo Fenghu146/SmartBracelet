@@ -1,5 +1,49 @@
-.pio
-.codeatlas
-.codegraph
-test_audio.wav
+# ============================================================
+# SmartBracelet — 忽略规则
+# 原则：只提交源代码与文档；构建产物、工具缓存、机器相关配置不入库。
+# ============================================================
+
+# ── PlatformIO 构建产物与依赖缓存 ──
+.pio/
+.pio/build/
+.pio/libdeps/
+
+# ── 编辑器 / IDE ──
+.idea/
+*.iml
+# PlatformIO 会按本机路径自动重新生成以下文件，故不入库
+.vscode/c_cpp_properties.json
+.vscode/launch.json
+.vscode/settings.json
+*.swp
+*~
+
+# ── 操作系统临时文件 ──
 nul
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ── 代码索引 / AI 工具缓存（本机生成）──
+.codeatlas/
+.codegraph/
+.qoder/
+traces/
+.claude/settings.local.json
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# ── 训练与调试产物 ──
+*.pt
+*.onnx
+*.tflite
+test_audio.wav

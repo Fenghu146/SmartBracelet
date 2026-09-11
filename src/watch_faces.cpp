@@ -115,9 +115,11 @@ void sport_face_update(const ui_telemetry_t *t) {
     snprintf(cal_str, sizeof(cal_str), "%.0f kcal", t->calories);
     lv_label_set_text(sf_cal_label, cal_str);
 
-    // Activity
+    // Activity: Run requires the highest intensity, then Walk, else Idle.
+    // NOTE: threshold order matters — test the >60 branch before >30,
+    // otherwise "Run" is unreachable (intensity > 60 also satisfies > 30).
     static const char *act_names[] = {"Walk", "Run", "Idle"};
-    int act = (t->intensity > 30) ? 0 : (t->intensity > 60) ? 1 : 2;
+    int act = (t->intensity > 60) ? 1 : (t->intensity > 30) ? 0 : 2;
     lv_label_set_text(sf_act_label, act_names[act]);
 }
 

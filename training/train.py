@@ -14,7 +14,10 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from dataset import load_and_split
+try:
+    from dataset import load_and_split
+except ModuleNotFoundError:  # dataset.py ships under archive/ in this repo
+    from archive.dataset import load_and_split
 from model import TinyHAR, TinyTCN, count_params
 
 

@@ -44,11 +44,20 @@ static void weather_fetch(void) {
   WiFiClient client;
   HTTPClient http;
 
+  // Prefer the location pushed by the phone over serial ({"c":"loc",...}),
+  // falling back to the compile-time defaults when none has been stored.
+  char lat[24] = {0}, lon[24] = {0};
+  nvs_get_weather_lat(lat, sizeof(lat));
+  nvs_get_weather_lon(lon, sizeof(lon));
+  const char *qlat = lat[0] ? lat : WEATHER_LAT;
+  const char *qlon = lon[0] ? lon : WEATHER_LON;
+
   char url[256];
   snprintf(url, sizeof(url),
     "http://api.open-meteo.com/v1/forecast"
-    "?latitude=" WEATHER_LAT "&longitude=" WEATHER_LON
-    "&current=temperature_2m,relative_humidity_2m,weather_code");
+    "?latitude=%s&longitude=%s"
+    "&current=temperature_2m,relative_humidity_2m,weather_code",
+    qlat, qlon);
 
   http.begin(client, url);
   http.setTimeout(5000);

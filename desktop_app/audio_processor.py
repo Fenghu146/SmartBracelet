@@ -3,7 +3,6 @@ Audio processor for SmartBracelet voice assistant.
 IMA ADPCM decode, WAV generation, Whisper ASR API integration.
 """
 
-import base64
 import io
 import json
 import struct
@@ -133,5 +132,5 @@ def transcribe_audio(
             result = json.loads(resp.read().decode("utf-8"))
             return result.get("text", "")
 
-    except (urllib.error.URLError, json.JSONDecodeError, OSError) as e:
+    except (urllib.error.URLError, json.JSONDecodeError, OSError):
         return None

@@ -15,7 +15,7 @@
 
 static const int CX = 120, CY = 142; // screen center
 
-// 鈹€鈹€ Status bar objects 鈹€鈹€
+// ── Status bar objects ──
 static lv_obj_t *wifi_icon = nullptr;
 static lv_obj_t *ble_icon = nullptr;
 static lv_obj_t *battery_bar_outer = nullptr;
@@ -24,19 +24,19 @@ static lv_obj_t *battery_label = nullptr;
 static lv_obj_t *charging_label = nullptr;
 static lv_obj_t *page_dots = nullptr;
 
-// 鈹€鈹€ Watchface objects 鈹€鈹€
+// ── Watchface objects ──
 static lv_obj_t *time_label = nullptr;
 static lv_obj_t *date_label = nullptr;
 static lv_obj_t *step_label = nullptr;
 
-// 鈹€鈹€ Sensor page objects 鈹€鈹€
+// ── Sensor page objects ──
 static lv_obj_t *accel_label = nullptr;
 static lv_obj_t *gyro_label = nullptr;
 static lv_obj_t *batt_volt_label = nullptr;
 static lv_obj_t *intensity_label = nullptr;
 static lv_obj_t *calories_label = nullptr;
 
-// 鈹€鈹€ Analog watchface objects 鈹€鈹€
+// ── Analog watchface objects ──
 static lv_obj_t *analog_face = nullptr;
 static lv_obj_t *hour_hand = nullptr;
 static lv_obj_t *min_hand = nullptr;
@@ -47,7 +47,7 @@ static int prev_hour = -1, prev_min = -1, prev_sec = -1;
 static bool analog_inited = false;
 static lv_obj_t *dial_marks[12];
 
-// 鈹€鈹€ Notification page objects 鈹€鈹€
+// ── Notification page objects ──
 static lv_obj_t *notif_list = nullptr;
 static lv_obj_t *notif_empty_label = nullptr;
 
@@ -55,7 +55,7 @@ static int last_batt = -1;
 static int last_notif_count = -1;  // Track notification count for incremental update
 static char time_str[12], date_str[32];
 
-// 鈹€鈹€ Status bar 鈹€鈹€
+// ── Status bar ──
 static void status_bar_create(lv_obj_t *parent) {
     wifi_icon = lv_label_create(parent);
     lv_label_set_text(wifi_icon, "~");
@@ -119,7 +119,7 @@ static void status_bar_create(lv_obj_t *parent) {
     lv_obj_set_style_text_color(page_dots, lv_color_hex(0x555566), 0);
 }
 
-// 鈹€鈹€ Digital watchface 鈹€鈹€
+// ── Digital watchface ──
 static void watchface_create(lv_obj_t *parent) {
     lv_obj_set_style_bg_color(parent, lv_color_hex(0x0d0d1a), 0);
 
@@ -143,7 +143,7 @@ static void watchface_create(lv_obj_t *parent) {
     lv_obj_align(step_label, LV_ALIGN_BOTTOM_MID, 0, -32);
 }
 
-// 鈹€鈹€ Sensor page 鈹€鈹€
+// ── Sensor page ──
 static void sensor_page_create(lv_obj_t *parent) {
     lv_obj_set_style_bg_color(parent, lv_color_hex(0x0d0d1a), 0);
 
@@ -184,7 +184,7 @@ static void sensor_page_create(lv_obj_t *parent) {
     lv_obj_align(calories_label, LV_ALIGN_LEFT_MID, 16, 88);
 }
 
-// 鈹€鈹€ Analog watchface 鈹€鈹€
+// ── Analog watchface ──
 static void analog_create_hand(lv_obj_t **hand, lv_point_t pts[2],
     int len, int width, lv_color_t color) {
     *hand = lv_line_create(analog_face);
@@ -227,7 +227,7 @@ static void update_analog_hand(lv_obj_t *hand, lv_point_t pts[2],
     lv_line_set_points(hand, pts, 2);
 }
 
-// 鈹€鈹€ Notification page 鈹€鈹€
+// ── Notification page ──
 static void notif_page_create(lv_obj_t *parent) {
     lv_obj_set_style_bg_color(parent, lv_color_hex(0x0d0d1a), 0);
 
@@ -257,9 +257,9 @@ static void notif_page_create(lv_obj_t *parent) {
 }
 
 
-// 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
+// ─────────────────────────────────
 // Public API
-// 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
+// ─────────────────────────────────
 
 void ui_pages_init(lv_obj_t **pages, int num_pages, CST816S *touch_dev) {
     // Pages: 0=watchface, 1=analog, 2=sensor, 3=notif, 4=stopwatch,
