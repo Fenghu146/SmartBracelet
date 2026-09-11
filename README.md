@@ -8,6 +8,7 @@
 [![Framework](https://img.shields.io/badge/framework-Arduino%20%2B%20PlatformIO-teal)]()
 [![UI](https://img.shields.io/badge/UI-LVGL%208.4-green)]()
 [![Desktop](https://img.shields.io/badge/desktop-PyQt6-orange)]()
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ---
 
@@ -207,6 +208,7 @@ SmartBracelet/
 ├── .vscode/
 │   └── extensions.json           # 推荐插件（其余 .vscode 配置由 PlatformIO 生成，不入库）
 ├── platformio.ini                # PlatformIO 构建配置
+├── LICENSE                       # MIT 开源许可证
 ├── CLAUDE.md                     # 硬件速查与开发交接说明
 ├── DEVELOPMENT_PLAN.md           # 开发计划与里程碑
 ├── EDGE_AI_TRAINING_PLAN.md      # 边缘 AI 方案
@@ -624,17 +626,29 @@ LVGL 8.4 配置。关键点：`LV_COLOR_16_SWAP` 必须为 **0**
 
 ## 13. 许可证
 
-本项目当前**未附带开源许可证文件（No License）**。在缺少许可证的情况下，
-默认保留全部权利，他人不得复制、修改或分发。
+本项目采用 **MIT License**，完整条款见仓库根目录的 [`LICENSE`](LICENSE) 文件。
 
-如需对外开源，建议补充以下之一（将 `LICENSE` 文件置于仓库根目录）：
+```
+Copyright (c) 2026 Fenghu146
+```
 
-- **MIT** — 最宽松，适合希望被广泛复用的项目；
-- **Apache-2.0** — 含专利授权条款，适合商业化顾虑较多的场景；
-- **GPL-3.0** — 强传染性，衍生作品需同样开源。
+简而言之：你可以自由地使用、修改、分发本项目（包括商业用途），只需保留原始版权声明与许可证文本；
+本软件按「原样」提供，作者不承担任何明示或默示的担保责任。
 
-> 注意：`lib/` 目录下的第三方库（GFX_Library_for_Arduino、SensorLib-Waveshare、XPowersLib）
-> 各自遵循其原始许可证，使用与再分发时请一并遵守。
+### 13.1 第三方组件
+
+仓库 `lib/` 下随源码分发的第三方库各自遵循其原始许可证，均与 MIT 兼容：
+
+| 组件 | 位置 | 许可证 | 版权 |
+| ---- | ---- | ------ | ---- |
+| GFX Library for Arduino | `lib/GFX_Library_for_Arduino` | MIT | Moon On Our Nation |
+| SensorLib（Waveshare 版） | `lib/SensorLib-Waveshare` | MIT | lewis he |
+| XPowersLib | `lib/XPowersLib` | MIT | lewis he |
+
+部分字库文件（`lib/GFX_Library_for_Arduino/src/font/u8g2_font_*`）来自 u8g2，
+遵循 **SIL Open Font License 1.1** 与 **GPLv2+（含字体嵌入例外）**，再分发时请保留其原始声明。
+
+此外，经由 PlatformIO 拉取的依赖（`lvgl`、`CST816S`、`ArduinoJson`）同样采用 MIT 许可证。
 
 ---
 
